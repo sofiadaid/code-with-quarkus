@@ -60,4 +60,24 @@ public class TableResource {
         }
         return Response.noContent().build(); // 204
     }
+
+    @POST
+    @Path("/{name}/rows")
+    public Response insertRows(@PathParam("name") String name, java.util.List<java.util.List<Object>> inputRows) {
+        try {
+            int inserted = registry.insertRows(name, inputRows);
+            return Response.status(Response.Status.CREATED)
+                    .entity(java.util.Map.of("inserted", inserted))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
 }
