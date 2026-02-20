@@ -2,7 +2,7 @@ package org.acme.service;
 import java.util.Collection;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.acme.model.Table;
-import java.util.Map;
+import java.util.*;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.acme.model.DataType;
@@ -51,7 +51,7 @@ public class TableRegistry {
         return s.trim();
     }
 
-    public int insertRows(String tableName, java.util.List<java.util.List<Object>> inputRows) {
+    public int insertRows(String tableName, List<List<Object>> inputRows) {
         Table t = get(tableName).orElseThrow(() -> new IllegalStateException("Table not found: " + tableName));
 
         if (inputRows == null || inputRows.isEmpty()) {
@@ -61,7 +61,7 @@ public class TableRegistry {
         int expected = t.columns.size();
 
         int count = 0;
-        for (java.util.List<Object> row : inputRows) {
+        for (List<Object> row : inputRows) {
             if (row.size() != expected) {
                 throw new IllegalArgumentException("Row size mismatch. Expected " + expected + " values, got " + row.size());
             }
@@ -93,6 +93,23 @@ public class TableRegistry {
             throw new IllegalArgumentException("Invalid value for column '" + colName + "' (" + type + "): " + value);
         }
     }
+
+    public List<List<Object>> getRows(String tableName, int offset, int limit) {
+        Table t = get(tableName).orElseThrow(() ->
+                new IllegalStateException("Table not found: " + tableName));
+
+        if (offset < 0) offset = 0;
+        if (limit <= 0) limit = 100;
+        int end = Math.min(t.rows.size(), offset + limit);
+
+        List<List<Object>> out = new java.util.ArrayList<>();
+        for (int i = offset; i < end; i++) {
+            Object[] row = t.rows.get(i);
+            out.add(Arrays.asList(row));
+        }
+        return out;
+    }
+
 
 }
 

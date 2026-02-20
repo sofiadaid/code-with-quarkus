@@ -37,7 +37,7 @@ public class TableRessourceTest {
                 .body("""
                         [
                           [1,"Sofia",21],
-                          [2,"Ali",30]
+                          [2,"Ania",30]
                         ]
                         """)
                 .when()

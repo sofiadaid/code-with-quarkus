@@ -80,4 +80,18 @@ public class TableResource {
         }
     }
 
+    @GET
+    @Path("/{name}/rows")
+    public Response listRows(@PathParam("name") String name,
+                             @QueryParam("offset") @DefaultValue("0") int offset,
+                             @QueryParam("limit") @DefaultValue("100") int limit) {
+        try {
+            return Response.ok(registry.getRows(name, offset, limit)).build();
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
 }
