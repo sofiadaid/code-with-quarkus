@@ -18,7 +18,7 @@ public class CsvImporterTest {
     @Test
     void testImportCsv() throws Exception {
 
-        // 🔹 1️⃣ Créer un fichier CSV temporaire
+        // Créer un fichier CSV temporaire
         File tempFile = File.createTempFile("test", ".csv");
 
         try (FileWriter writer = new FileWriter(tempFile)) {
@@ -27,7 +27,7 @@ public class CsvImporterTest {
             writer.write("2,Sofia\n");
         }
 
-        // 🔹 2️⃣ Créer la table AVANT l'import
+        // Créer la table AVANT l'import
         TableRegistry registry = new TableRegistry();
 
         List<Columntable> columns = List.of(
@@ -38,14 +38,12 @@ public class CsvImporterTest {
         Table table = new Table("TestTable", columns);
         registry.create(table);
 
-        // 🔹 3️⃣ Importer le CSV
+        // Importer le CSV
         int inserted = CsvImporter.importCsv(
                 "TestTable",
                 tempFile.getAbsolutePath(),
                 registry
         );
-
-        // 🔹 4️⃣ Vérifications
 
         assertEquals(2, inserted);
 

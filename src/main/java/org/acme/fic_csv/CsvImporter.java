@@ -43,7 +43,7 @@ public class CsvImporter {
                 rows.add(row);
             }
 
-            // 🔹 Ici on insère dans la table EXISTANTE
+            // Ici on insère dans la table EXISTANTE
             return registry.insertRows(tableName, rows);
         }
     }
