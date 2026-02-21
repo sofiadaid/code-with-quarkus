@@ -5,6 +5,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import org.acme.fic_csv.CsvImporter;
 import org.acme.model.Table;
 import org.acme.service.TableRegistry;
 
@@ -103,7 +104,7 @@ public class TableResource {
 
             String path = body.get("path");
 
-            int inserted = org.acme.fic_csv.CsvImporter.importCsv(
+            int inserted = CsvImporter.importCsv(
                     name,
                     path,
                     registry
