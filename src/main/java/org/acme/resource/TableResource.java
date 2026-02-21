@@ -94,4 +94,30 @@ public class TableResource {
         }
     }
 
+    @POST
+    @Path("/{name}/import")
+    public Response importCsv(@PathParam("name") String name,
+                              java.util.Map<String, String> body) {
+
+        try {
+
+            String path = body.get("path");
+
+            int inserted = org.acme.fic_csv.CsvImporter.importCsv(
+                    name,
+                    path,
+                    registry
+            );
+
+            return Response.status(Response.Status.CREATED)
+                    .entity(java.util.Map.of("inserted", inserted))
+                    .build();
+
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
 }
