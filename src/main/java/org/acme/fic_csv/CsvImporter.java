@@ -57,6 +57,7 @@ public class CsvImporter {
 }
 
 /*
+
 public class CsvImporter {
     public static int importCsv(String tableName, String path, TableRegistry registry) throws Exception {
         File file = new File(path);
