@@ -1,21 +1,27 @@
 package org.acme.service;
 import java.util.Collection;
+
+import io.quarkus.runtime.util.StringUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.acme.model.Table;
 import java.util.*;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.acme.model.DataType;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.collections4.CollectionUtils;
 
 @ApplicationScoped
 public class TableRegistry {
     private final Map<String,Table> tables=new ConcurrentHashMap<>();
 
     public Table create(Table table) {
-        if (table==null || table.name ==null || table.name.trim().isEmpty()) {
+        if (table==null || StringUtils.isBlank(table.name)) {
             throw new IllegalArgumentException("Table name is required!!");
         }
-        if (table.columns== null || table.columns.isEmpty()) {
+
+
+        if (CollectionUtils.isEmpty(table.columns)) {
             throw new IllegalArgumentException("At least one column is required");
         }
         String name = normalize(table.name);
@@ -34,18 +40,6 @@ public class TableRegistry {
         return Optional.ofNullable(tables.get(normalize(name)));
     }
 
-    public Collection<Table> list() {
-        return tables.values();
-    }
-
-    public boolean drop(String name) {
-        if (name==null) return false;
-        return tables.remove(normalize(name)) !=null;
-    }
-    public boolean exists(String name) {
-        if (name==null) return false;
-        return tables.containsKey(normalize(name));
-    }
 
     private String normalize(String s){
         return s.trim();

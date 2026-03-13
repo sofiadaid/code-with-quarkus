@@ -6,7 +6,7 @@ import java.util.List;
 
 public class Table{
     public String name;
-    public List<Columntable> columns;
+    public List<Column> columns;
 
     // Données
     public List<Object[]> rows = new ArrayList<>();
@@ -16,7 +16,7 @@ public class Table{
 
     public Table(){}
 
-    public Table(String name, List<Columntable> columns) {
+    public Table(String name, List<Column> columns) {
         this.name = name;
         this.columns = columns;
         buildIndex();

@@ -24,20 +24,12 @@ public class TableResource {
         try {
             Table created = registry.create(req);
             return Response.status(Response.Status.CREATED).entity(created).build();
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            e.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.CONFLICT)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
-    }
-
-    @GET
-    public Response list() {
-        return Response.ok(registry.list()).build();
     }
 
     @GET
@@ -50,17 +42,6 @@ public class TableResource {
                         .build());
     }
 
-    @DELETE
-    @Path("/{name}")
-    public Response drop(@PathParam("name") String name) {
-        boolean deleted = registry.drop(name);
-        if (!deleted) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", "Table not found: " + name))
-                    .build();
-        }
-        return Response.noContent().build(); // 204
-    }
 
     @POST
     @Path("/{name}/rows")
@@ -70,12 +51,9 @@ public class TableResource {
             return Response.status(Response.Status.CREATED)
                     .entity(java.util.Map.of("inserted", inserted))
                     .build();
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            e.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(java.util.Map.of("error", e.getMessage()))
-                    .build();
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
                     .entity(java.util.Map.of("error", e.getMessage()))
                     .build();
         }
@@ -88,7 +66,8 @@ public class TableResource {
                              @QueryParam("limit") @DefaultValue("100") int limit) {
         try {
             return Response.ok(registry.getRows(name, offset, limit)).build();
-        } catch (IllegalStateException e) {
+        } catch (Exception e) {
+            e.printStackTrace();
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(java.util.Map.of("error", e.getMessage()))
                     .build();
