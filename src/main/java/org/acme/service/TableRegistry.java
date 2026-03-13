@@ -110,6 +110,39 @@ public class TableRegistry {
         return out;
     }
 
+    public List<List<Object>> select(String tableName, List<String> selectedColumns) {
+
+        Table table = get(tableName)
+                .orElseThrow(() -> new IllegalStateException("Table not found: " + tableName));
+
+        // Récupérer les index des colonnes demandées
+        List<Integer> indexes = new ArrayList<>();
+
+        for (String col : selectedColumns) {
+            Integer idx = table.colIndex.get(col);
+            if (idx == null) {
+                throw new IllegalArgumentException("Unknown column: " + col);
+            }
+            indexes.add(idx);
+        }
+
+        List<List<Object>> result = new ArrayList<>();
+
+        // Parcours des lignes
+        for (Object[] row : table.rows) {
+
+            List<Object> projectedRow = new ArrayList<>();
+
+            for (int idx : indexes) {
+                projectedRow.add(row[idx]);
+            }
+
+            result.add(projectedRow);
+        }
+
+        return result;
+    }
+
 
 }
 

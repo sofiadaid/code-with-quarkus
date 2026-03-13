@@ -5,6 +5,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import org.acme.fic_csv.CsvImporter;
 import org.acme.model.Table;
 import org.acme.service.TableRegistry;
 
@@ -90,6 +91,63 @@ public class TableResource {
         } catch (IllegalStateException e) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
+    @POST
+    @Path("/{name}/import")
+    public Response importCsv(@PathParam("name") String name,
+                              java.util.Map<String, String> body) {
+
+        try {
+
+            String path = body.get("path");
+
+            int inserted = CsvImporter.importCsv(
+                    name,
+                    path,
+                    registry
+            );
+
+            return Response.status(Response.Status.CREATED)
+                    .entity(java.util.Map.of("inserted", inserted))
+                    .build();
+
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{name}/select")
+    public Response select(@PathParam("name") String name,
+                           @QueryParam("columns") String columnsParam) {
+
+        try {
+
+            if (columnsParam == null || columnsParam.isBlank()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "columns parameter is required"))
+                        .build();
+            }
+
+            List<String> columns = Arrays.asList(columnsParam.split(","));
+
+            List<List<Object>> result = registry.select(name, columns);
+
+            return Response.ok(result).build();
+
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", e.getMessage()))
                     .build();
         }
     }
