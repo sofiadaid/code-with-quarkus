@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.List;
 
 public class Table{
-    public String name;
-    public List<Column> columns;
+    private String name;
+    private List<Column> columns;
 
     // Données
     public List<Object[]> rows = new ArrayList<>();
