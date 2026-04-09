@@ -10,4 +10,7 @@ public class Column {
         this.name = name;
         this.type = type;
     }
+    public DataType getType() {
+        return type;
+    }
 }

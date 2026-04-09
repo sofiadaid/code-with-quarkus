@@ -11,6 +11,20 @@ import org.acme.service.TableRegistry;
 
 import java.util.Map;
 
+import java.io.InputStream;
+import java.io.File;
+
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+
+import java.util.List;
+import java.util.Arrays;
+import java.util.Map;
+
+import org.acme.importer.ParquetImporter;
+import org.jboss.resteasy.reactive.RestForm;
+
+
 @Path("/api/tables")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
@@ -74,28 +88,38 @@ public class TableResource {
         }
     }
 
+
+
     @POST
     @Path("/{name}/import")
-    public Response importCsv(@PathParam("name") String name,
-                              java.util.Map<String, String> body) {
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response importParquet(
+            @PathParam("name") String name,
+            @RestForm("file") InputStream fileStream) {
 
         try {
+            if (fileStream == null) {
+                throw new IllegalStateException("Fichier non reçu !");
+            }
 
-            String path = body.get("path");
+            Table table = registry.get(name)
+                    .orElseThrow(() -> new IllegalStateException("Table not found: " + name));
 
-            int inserted = CsvImporter.importCsv(
-                    name,
-                    path,
-                    registry
-            );
+            File tempFile = File.createTempFile("import_", ".parquet");
+            Files.copy(fileStream, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+            int inserted = ParquetImporter.loadParquet(tempFile, table);
+
+            tempFile.delete();
 
             return Response.status(Response.Status.CREATED)
-                    .entity(java.util.Map.of("inserted", inserted))
+                    .entity(Map.of("inserted", inserted))
                     .build();
 
         } catch (Exception e) {
+            e.printStackTrace(); // 🔥 IMPORTANT pour debug
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .entity(Map.of("error", e.getMessage()))
                     .build();
         }
     }
