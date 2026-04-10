@@ -9,10 +9,10 @@ public class Table{
     private List<Column> columns;
 
     // Données
-    public List<Object[]> rows = new ArrayList<>();
+    private List<Object[]> rows = new ArrayList<>();
 
     // Index de colonnes : "age" -> 2
-    public Map<String, Integer> colIndex = new HashMap<>();
+    private Map<String, Integer> colIndex = new HashMap<>();
 
     public Table(){}
 
@@ -25,7 +25,39 @@ public class Table{
     public void buildIndex() {
         colIndex.clear();
         for (int i = 0; i < columns.size(); i++) {
-            colIndex.put(columns.get(i).name, i);
+            colIndex.put(columns.get(i).getName(), i);
         }
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public List<Column> getColumns() {
+        return columns;
+    }
+
+    public void setColumns(List<Column> columns) {
+        this.columns = columns;
+    }
+
+    public List<Object[]> getRows() {
+        return rows;
+    }
+
+    public void setRows(List<Object[]> rows) {
+        this.rows = rows;
+    }
+
+    public Map<String, Integer> getColIndex() {
+        return colIndex;
+    }
+
+    public void setColIndex(Map<String, Integer> colIndex) {
+        this.colIndex = colIndex;
     }
 }

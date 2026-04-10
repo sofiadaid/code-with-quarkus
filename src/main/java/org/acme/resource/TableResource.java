@@ -10,8 +10,11 @@ import java.util.Arrays;
 import org.acme.fic_csv.CsvImporter;
 import org.acme.model.Table;
 import org.acme.service.TableRegistry;
+import org.acme.service.QueryExecutionService;
+import org.acme.model.Filter;
 
 import java.util.Map;
+
 
 @Path("/api/tables")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -20,6 +23,9 @@ public class TableResource {
 
     @Inject
     TableRegistry registry;
+
+    @Inject
+    QueryExecutionService queryExecutionService;
 
     @POST
     public Response create(Table req) {
@@ -117,7 +123,7 @@ public class TableResource {
 
             List<String> columns = Arrays.asList(columnsParam.split(","));
 
-            List<List<Object>> result = registry.select(name, columns);
+            List<List<Object>> result = queryExecutionService.select(name, columns);
 
             return Response.ok(result).build();
 
@@ -131,6 +137,74 @@ public class TableResource {
                     .entity(Map.of("error", e.getMessage()))
                     .build();
         }
+    }
+
+    @POST
+    @Path("/{name}/select-where")
+    public Response selectWhere(@PathParam("name") String name,
+                                Map<String, Object> body) {
+        try {
+            List<String> columns = (List<String>) body.get("columns");
+            Map<String, Object> filterMap = (Map<String, Object>) body.get("filter");
+
+            if (columns == null || columns.isEmpty()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "columns are required"))
+                        .build();
+            }
+
+            if (filterMap == null) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "filter is required"))
+                        .build();
+            }
+
+            Filter filter = new Filter();
+            filter.setColumn((String) filterMap.get("column"));
+            filter.setOperator((String) filterMap.get("operator"));
+            filter.setValue(filterMap.get("value"));
+
+            List<List<Object>> result = queryExecutionService.selectWhere(name, columns, filter);
+
+            return Response.ok(result).build();
+
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{name}/group-by")
+    public Response groupBy(@PathParam("name") String name,
+                            @QueryParam("column") String column) {
+        try {
+            if (column == null || column.isBlank()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "column parameter is required"))
+                        .build();
+            }
+
+            List<List<Object>> result = queryExecutionService.groupByCount(name, column);
+            return Response.ok(result).build();
+
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+        }
+
     }
 
 }

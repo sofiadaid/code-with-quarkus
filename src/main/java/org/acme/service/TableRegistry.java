@@ -1,11 +1,8 @@
 package org.acme.service;
-import java.util.Collection;
 
-import io.quarkus.runtime.util.StringUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.acme.model.Table;
 import java.util.*;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.acme.model.DataType;
 import org.apache.commons.lang3.StringUtils;
@@ -16,16 +13,20 @@ public class TableRegistry {
     private final Map<String,Table> tables=new ConcurrentHashMap<>();
 
     public Table create(Table table) {
-        if (table==null || StringUtils.isBlank(table.name)) {
+        if (table==null || StringUtils.isBlank(table.getName())) {
             throw new IllegalArgumentException("Table name is required!!");
         }
 
 
-        if (CollectionUtils.isEmpty(table.columns)) {
+        if (CollectionUtils.isEmpty(table.getColumns())) {
             throw new IllegalArgumentException("At least one column is required");
         }
-        String name = normalize(table.name);
+
+        table.buildIndex();
+
+        String name = normalize(table.getName());
         //putIfAbsent->no data race
+        table.setName(name);
         Table previous = tables.putIfAbsent(name, table);
         if (previous !=null) {
             throw new IllegalStateException("Table already exists: " +name);
@@ -52,7 +53,7 @@ public class TableRegistry {
             throw new IllegalArgumentException("No rows provided");
         }
 
-        int expected = t.columns.size();
+        int expected = t.getColumns().size();
 
         int count = 0;
         for (List<Object> row : inputRows) {
@@ -62,11 +63,11 @@ public class TableRegistry {
 
             Object[] converted = new Object[expected];
             for (int i = 0; i < expected; i++) {
-                DataType type = t.columns.get(i).type;
-                converted[i] = convert(row.get(i), type, t.columns.get(i).name);
+                DataType type = t.getColumns().get(i).getType();
+                converted[i] = convert(row.get(i), type, t.getColumns().get(i).getName());
             }
 
-            t.rows.add(converted);
+            t.getRows().add(converted);
             count++;
         }
         return count;
@@ -94,47 +95,14 @@ public class TableRegistry {
 
         if (offset < 0) offset = 0;
         if (limit <= 0) limit = 100;
-        int end = Math.min(t.rows.size(), offset + limit);
+        int end = Math.min(t.getRows().size(), offset + limit);
 
         List<List<Object>> out = new java.util.ArrayList<>();
         for (int i = offset; i < end; i++) {
-            Object[] row = t.rows.get(i);
+            Object[] row = t.getRows().get(i);
             out.add(Arrays.asList(row));
         }
         return out;
-    }
-
-    public List<List<Object>> select(String tableName, List<String> selectedColumns) {
-
-        Table table = get(tableName)
-                .orElseThrow(() -> new IllegalStateException("Table not found: " + tableName));
-
-        // Récupérer les index des colonnes demandées
-        List<Integer> indexes = new ArrayList<>();
-
-        for (String col : selectedColumns) {
-            Integer idx = table.colIndex.get(col);
-            if (idx == null) {
-                throw new IllegalArgumentException("Unknown column: " + col);
-            }
-            indexes.add(idx);
-        }
-
-        List<List<Object>> result = new ArrayList<>();
-
-        // Parcours des lignes
-        for (Object[] row : table.rows) {
-
-            List<Object> projectedRow = new ArrayList<>();
-
-            for (int idx : indexes) {
-                projectedRow.add(row[idx]);
-            }
-
-            result.add(projectedRow);
-        }
-
-        return result;
     }
 
 
