@@ -28,4 +28,12 @@ public class Table{
             colIndex.put(columns.get(i).name, i);
         }
     }
+    public List<Column> getColumns() {
+        return columns;
+    }
+
+    public void addRow(Object[] row) {
+        rows.add(row);
+    }
+
 }
