@@ -105,6 +105,188 @@ public class TableRegistry {
         return out;
     }
 
+    public List<List<Object>> selectQuery(String tableName, String query) {
+        Table table = get(tableName)
+                .orElseThrow(() -> new IllegalStateException("Table not found: " + tableName));
+
+        // Parser la query : "SELECT col1, col2 WHERE col3 > 10 ORDER BY col1 LIMIT 50"
+        String upper = query.trim().toUpperCase();
+
+        if (!upper.startsWith("SELECT")) {
+            throw new IllegalArgumentException("Query must start with SELECT");
+        }
+
+        // --- Extraire les parties ---
+        String afterSelect = query.trim().substring(6).trim(); // tout après SELECT
+
+        String selectPart, wherePart = null, orderByPart = null;
+        int limitValue = -1;
+
+        // LIMIT
+        int limitIdx = upperIndexOf(afterSelect, "LIMIT");
+        if (limitIdx != -1) {
+            limitValue = Integer.parseInt(afterSelect.substring(limitIdx + 5).trim().split("\\s+")[0]);
+            afterSelect = afterSelect.substring(0, limitIdx).trim();
+        }
+
+        // ORDER BY
+        int orderIdx = upperIndexOf(afterSelect, "ORDER BY");
+        if (orderIdx != -1) {
+            orderByPart = afterSelect.substring(orderIdx + 8).trim();
+            afterSelect = afterSelect.substring(0, orderIdx).trim();
+        }
+
+        // WHERE
+        int whereIdx = upperIndexOf(afterSelect, "WHERE");
+        if (whereIdx != -1) {
+            wherePart = afterSelect.substring(whereIdx + 5).trim();
+            afterSelect = afterSelect.substring(0, whereIdx).trim();
+        }
+
+        selectPart = afterSelect.trim();
+
+        // --- Colonnes SELECT ---
+        List<Integer> selectedIndexes = new ArrayList<>();
+        List<String> selectedNames = new ArrayList<>();
+
+        if (selectPart.equals("*")) {
+            for (int i = 0; i < table.getColumns().size(); i++) {
+                selectedIndexes.add(i);
+                selectedNames.add(table.getColumns().get(i).getName());
+            }
+        } else {
+            for (String col : selectPart.split(",")) {
+                String colName = col.trim();
+                Integer idx = table.getColIndex().get(colName);
+                if (idx == null) throw new IllegalArgumentException("Unknown column: " + colName);
+                selectedIndexes.add(idx);
+                selectedNames.add(colName);
+            }
+        }
+
+        // --- Filtrer (WHERE) ---
+        List<Object[]> filtered = new ArrayList<>();
+        for (Object[] row : table.getRows()) {
+            if (wherePart == null || matchesWhere(row, wherePart, table)) {
+                filtered.add(row);
+            }
+        }
+
+        // --- Trier (ORDER BY) ---
+        if (orderByPart != null) {
+            String[] orderTokens = orderByPart.split("\\s+");
+            String orderCol = orderTokens[0].trim();
+            boolean desc = orderTokens.length > 1 && orderTokens[1].equalsIgnoreCase("DESC");
+            Integer orderIdx2 = table.getColIndex().get(orderCol);
+            if (orderIdx2 == null) throw new IllegalArgumentException("Unknown column in ORDER BY: " + orderCol);
+
+            filtered.sort((a, b) -> {
+                Object va = a[orderIdx2];
+                Object vb = b[orderIdx2];
+                if (va == null && vb == null) return 0;
+                if (va == null) return desc ? 1 : -1;
+                if (vb == null) return desc ? -1 : 1;
+                int cmp = ((Comparable) va).compareTo(vb);
+                return desc ? -cmp : cmp;
+            });
+        }
+
+        // --- LIMIT ---
+        if (limitValue > 0 && filtered.size() > limitValue) {
+            filtered = filtered.subList(0, limitValue);
+        }
+
+        // --- Projection ---
+        List<List<Object>> result = new ArrayList<>();
+        for (Object[] row : filtered) {
+            List<Object> projectedRow = new ArrayList<>();
+            for (int idx : selectedIndexes) {
+                projectedRow.add(row[idx]);
+            }
+            result.add(projectedRow);
+        }
+
+        return result;
+    }
+
+    // Cherche un mot-clé dans la query sans casser la casse des données
+    private int upperIndexOf(String s, String keyword) {
+        return s.toUpperCase().indexOf(keyword);
+    }
+
+    // Évalue une condition WHERE simple : "col OPERATEUR valeur"
+    private boolean matchesWhere(Object[] row, String condition, Table table) {
+        // Opérateurs supportés : >=, <=, !=, >, <, =, LIKE
+        String[] ops = {">=", "<=", "!=", ">", "<", "="};
+
+        for (String op : ops) {
+            int opIdx = condition.indexOf(op);
+            if (opIdx == -1) continue;
+
+            String colName = condition.substring(0, opIdx).trim();
+            String rawValue = condition.substring(opIdx + op.length()).trim()
+                    .replaceAll("^'|'$", ""); // enlève les quotes si STRING
+
+            Integer colIdx = table.getColIndex().get(colName);
+            if (colIdx == null) throw new IllegalArgumentException("Unknown column in WHERE: " + colName);
+
+            Object cellValue = row[colIdx];
+            if (cellValue == null) return false;
+
+            // Comparaison selon le type
+            try {
+                if (cellValue instanceof Integer) {
+                    int a = (Integer) cellValue, b = Integer.parseInt(rawValue);
+                    return switch (op) {
+                        case ">"  -> a > b;  case ">=" -> a >= b;
+                        case "<"  -> a < b;  case "<=" -> a <= b;
+                        case "="  -> a == b; case "!=" -> a != b;
+                        default -> false;
+                    };
+                } else if (cellValue instanceof Long) {
+                    long a = (Long) cellValue, b = Long.parseLong(rawValue);
+                    return switch (op) {
+                        case ">"  -> a > b;  case ">=" -> a >= b;
+                        case "<"  -> a < b;  case "<=" -> a <= b;
+                        case "="  -> a == b; case "!=" -> a != b;
+                        default -> false;
+                    };
+                } else if (cellValue instanceof Double) {
+                    double a = (Double) cellValue, b = Double.parseDouble(rawValue);
+                    return switch (op) {
+                        case ">"  -> a > b;  case ">=" -> a >= b;
+                        case "<"  -> a < b;  case "<=" -> a <= b;
+                        case "="  -> a == b; case "!=" -> a != b;
+                        default -> false;
+                    };
+                } else { // STRING
+                    int cmp = cellValue.toString().compareTo(rawValue);
+                    return switch (op) {
+                        case "="  -> cmp == 0; case "!=" -> cmp != 0;
+                        case ">"  -> cmp > 0;  case ">=" -> cmp >= 0;
+                        case "<"  -> cmp < 0;  case "<=" -> cmp <= 0;
+                        default -> false;
+                    };
+                }
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid value in WHERE: " + rawValue);
+            }
+        }
+
+        // LIKE
+        if (condition.toUpperCase().contains(" LIKE ")) {
+            String[] parts = condition.split("(?i)\\sLIKE\\s");
+            String colName = parts[0].trim();
+            String pattern = parts[1].trim().replaceAll("^'|'$", "")
+                    .replace("%", ".*").replace("_", ".");
+            Integer colIdx = table.getColIndex().get(colName);
+            if (colIdx == null) throw new IllegalArgumentException("Unknown column in LIKE: " + colName);
+            Object cellValue = row[colIdx];
+            return cellValue != null && cellValue.toString().matches(pattern);
+        }
+
+        throw new IllegalArgumentException("Cannot parse WHERE condition: " + condition);
+    }
 
 }
 
