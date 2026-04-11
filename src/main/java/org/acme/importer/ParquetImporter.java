@@ -57,13 +57,23 @@ public class ParquetImporter {
                 RecordReader<Group> recordReader =
                         columnIO.getRecordReader(pages, new GroupRecordConverter(schema));
 
+                // pré-calcul des types primitifs pour éviter le re-lookup dans la boucle
+                org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName[] primitiveTypes =
+                        new org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName[columns.size()];
+                for (int col = 0; col < columns.size(); col++) {
+                    Type field = schema.getFields().get(col);
+                    primitiveTypes[col] = field.isPrimitive()
+                            ? field.asPrimitiveType().getPrimitiveTypeName()
+                            : null;
+                }
+
                 for (int i = 0; i < rowCount; i++) {
                     Group group = recordReader.read();
                     Object[] row = new Object[columns.size()];
                     for (int col = 0; col < columns.size(); col++) {
-                        row[col] = readValue(group, columns.get(col), col);
+                        row[col] = readValue(group, columns.get(col), col, primitiveTypes[col]);
                     }
-                    table.addRow(row);
+                    table.getRows().add(row);
                     totalInserted++;
                 }
             }
@@ -77,8 +87,8 @@ public class ParquetImporter {
         for (Type field : schema.getFields()) {
             // Accès direct aux champs publics de Column
             Column col = new Column();
-            col.name = field.getName();
-            col.type = parquetTypeToDataType(field);
+            col.setName(field.getName());
+            col.setType(parquetTypeToDataType(field));
             columns.add(col);
         }
         return columns;
@@ -88,23 +98,31 @@ public class ParquetImporter {
         if (!field.isPrimitive()) return DataType.STRING;
 
         switch (field.asPrimitiveType().getPrimitiveTypeName()) {
-            case INT32:  return DataType.INT;
-            case INT64:  return DataType.LONG;
-            case DOUBLE:
-            case FLOAT:  return DataType.DOUBLE;
-            default:     return DataType.STRING;
+            case INT32:               return DataType.INT;
+            case INT64:               return DataType.LONG;
+            case DOUBLE:              return DataType.DOUBLE;
+            case FLOAT:               return DataType.DOUBLE; // converti en double à la lecture
+            case BINARY:
+            case FIXED_LEN_BYTE_ARRAY: return DataType.STRING;
+            default:                  return DataType.STRING;
         }
     }
 
-    private static Object readValue(Group group, Column column, int index) {
-        if (group.getFieldRepetitionCount(index) == 0) return null;
+    private static Object readValue(Group group, Column column, int colIndex,
+                                    org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName primitiveType) {
+        if (group.getFieldRepetitionCount(colIndex) == 0) return null;
 
-        switch (column.type) {
-            case INT:    return group.getInteger(index, 0);
-            case LONG:   return group.getLong(index, 0);
-            case DOUBLE: return group.getDouble(index, 0);
-            case STRING: return group.getString(index, 0);
-            default:     return group.getValueToString(index, 0);
+        switch (column.getType()) {
+            case INT:    return group.getInteger(colIndex, 0);
+            case LONG:   return group.getLong(colIndex, 0);
+            case DOUBLE:
+                // FLOAT doit être lu comme float puis converti
+                if (primitiveType == org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FLOAT) {
+                    return (double) group.getFloat(colIndex, 0);
+                }
+                return group.getDouble(colIndex, 0);
+            case STRING: return group.getValueToString(colIndex, 0);
+            default:     return group.getValueToString(colIndex, 0);
         }
     }
 }
