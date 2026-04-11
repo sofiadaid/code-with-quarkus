@@ -88,6 +88,11 @@
             <version>3.3.6</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-common</artifactId>
+            <version>1.13.1</version>
+        </dependency>
     </dependencies>
 
     <build>
