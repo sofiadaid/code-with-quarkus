@@ -80,6 +80,14 @@
             <artifactId>hadoop-common</artifactId>
             <version>3.3.6</version>
         </dependency>
+
+        <!-- Hadoop MapReduce — uniquement pour écrire des fichiers Parquet dans les tests -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-core</artifactId>
+            <version>3.3.6</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

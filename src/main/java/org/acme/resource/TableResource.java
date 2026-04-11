@@ -160,7 +160,7 @@ public class TableResource {
                         .entity(Map.of("error", "q parameter is required"))
                         .build();
             }
-            List<List<Object>> result = registry.selectQuery(name, q);
+            List<List<Object>> result = queryExecutionService.selectQuery(name, q);
             return Response.ok(result).build();
         } catch (Exception e) {
             logger.error("Erreur lors de la query", e);
