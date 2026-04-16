@@ -295,34 +295,45 @@ public class UiRessource {
                         setStatus('queryStatus', 'Exécution…', 'info');
                         document.getElementById('resultsWrap').style.display = 'none';
                         try {
+                            // Récupère le schéma pour avoir les vrais noms de colonnes
+                            const schemaRes = await fetch(`/api/tables/${table}`);
+                            const schema = await schemaRes.json();
+                            if (!schemaRes.ok) {
+                                setStatus('queryStatus', `Table introuvable : ${schema.error}`, 'err');
+                                return;
+                            }
+                            const allColNames = schema.columns.map(c => c.name);
+
                             const r = await fetch(`/api/tables/${table}/query?q=${encodeURIComponent(q)}`);
                             const d = await r.json();
                             if (!r.ok) {
                                 setStatus('queryStatus', `Erreur : ${d.error}`, 'err');
                                 return;
                             }
-                            renderResults(d);
+                            renderResults(d, q, allColNames);
                             setStatus('queryStatus', '', '');
                         } catch(e) {
                             setStatus('queryStatus', 'Erreur réseau : ' + e.message, 'err');
                         }
                     }
 
-                    function renderResults(rows) {
+                    function renderResults(rows, q, allColNames) {
                         if (!rows.length) {
                             setStatus('queryStatus', 'Aucun résultat.', 'info');
                             return;
                         }
-                        const q = document.getElementById('queryInput').value.trim();
+
+                        // Extrait la partie SELECT (avant WHERE / ORDER BY / LIMIT)
                         let afterSelect = q.trim().substring(6).trim();
                         ['WHERE','ORDER BY','LIMIT'].forEach(kw => {
                             const i = afterSelect.toUpperCase().indexOf(kw);
                             if (i !== -1) afterSelect = afterSelect.substring(0, i).trim();
                         });
-                        // Nombre de colonnes depuis la première ligne
-                        const colCount = rows[0].length;
+                        afterSelect = afterSelect.trim();
+
+                        // Noms de colonnes : vrais noms si SELECT *, sinon ceux de la requête
                         const colNames = afterSelect === '*'
-                            ? Array.from({length: colCount}, (_, i) => 'col' + i)
+                            ? allColNames
                             : afterSelect.split(',').map(s => s.trim());
 
                         const tbl = document.getElementById('resultsTable');
