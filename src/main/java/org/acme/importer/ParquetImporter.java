@@ -28,6 +28,8 @@ import java.util.List;
 public class ParquetImporter {
 
     public static int loadParquet(File file, String tableName, TableRegistry registry) throws IOException {
+        Configuration conf = new Configuration();
+        Path hadoopPath = new Path(file.getAbsolutePath());
         int totalInserted = 0;
 
         InputFile inputFile = new InputFile() {
@@ -91,20 +93,20 @@ public class ParquetImporter {
         try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
             MessageType schema = reader.getFooter().getFileMetaData().getSchema();
 
-            Table table = registry.get(tableName).orElseGet(() -> {
-                Table newTable = new Table(tableName, inferColumns(schema));
-                return registry.create(newTable);
-            });
+            Table table = registry.get(tableName)
+                    .orElseThrow(() -> new IllegalStateException("Table not found: " + tableName));
 
-            List<Column> columns = table.getColumns();
-
-            if (schema.getFieldCount() != columns.size()) {
+            // Si la table est vide de colonnes, on les injecte depuis le schéma Parquet
+            if (table.columns == null || table.columns.isEmpty()) {
+                table.columns = inferColumns(schema);
+                table.buildIndex();
+            } else if (schema.getFieldCount() != table.columns.size()) {
                 throw new IllegalArgumentException(
                         "Schema mismatch: Parquet=" + schema.getFieldCount()
-                                + " Table=" + columns.size()
-                );
+                                + " vs Table=" + table.columns.size());
             }
 
+            List<Column> columns = table.getColumns();
             MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
             PageReadStore pages;
 
@@ -136,7 +138,6 @@ public class ParquetImporter {
                 }
             }
         }
-
         return totalInserted;
     }
 

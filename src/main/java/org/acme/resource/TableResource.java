@@ -147,82 +147,18 @@ public class TableResource {
     }
 
     @POST
-    @Path("/{name}/select")
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response select(@PathParam("name") String name, List<String> selectedColumns) {
+    @Path("/{name}/create")
+    public Response createEmpty(@PathParam("name") String name) {
         try {
-            if (selectedColumns == null || selectedColumns.isEmpty()) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity(Map.of("error", "At least one column is required"))
-                        .build();
-            }
-
-            return Response.ok(queryService.select(name, selectedColumns)).build();
-
-        } catch (IllegalArgumentException e) {
+            Table created = registry.createEmpty(name);
+            return Response.status(Response.Status.CREATED)
+                    .entity(Map.of("name", created.name, "message", "Table créée"))
+                    .build();
+        } catch (Exception e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
-
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
+                    .entity(Map.of("error", e.getMessage())).build();
         }
     }
 
-    @POST
-    @Path("/{name}/select-where")
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response selectWhere(@PathParam("name") String name, SelectWhereRequest request) {
-        try {
-            if (request == null || request.columns == null || request.columns.isEmpty() || request.filter == null) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity(Map.of("error", "columns and filter are required"))
-                        .build();
-            }
 
-            return Response.ok(queryService.selectWhere(name, request.columns, request.filter)).build();
-
-        } catch (IllegalArgumentException e) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
-
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
-        }
-    }
-
-    @GET
-    @Path("/{name}/group-by")
-    public Response groupBy(@PathParam("name") String name,
-                            @QueryParam("column") String column) {
-        try {
-            if (column == null || column.isBlank()) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity(Map.of("error", "column parameter is required"))
-                        .build();
-            }
-
-            return Response.ok(queryService.groupByCount(name, column)).build();
-
-        } catch (IllegalArgumentException e) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
-
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
-        }
-    }
-
-    public static class SelectWhereRequest {
-        public List<String> columns;
-        public Filter filter;
-    }
 }
