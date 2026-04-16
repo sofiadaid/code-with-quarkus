@@ -95,6 +95,23 @@ public class UiRessource {
                             </div>
                         </div>
 
+
+
+                <!-- BENCHMARK -->
+                <div class="card">
+                            <h2>Benchmark</h2>
+                
+                            <button onclick="runBenchmark()">Lancer benchmark</button>
+                
+                            <div id="benchmarkStatus"></div>
+                
+                            <div id="benchmarkWrap" style="margin-top:16px; display:none;">
+                                <div class="overflow">
+                                    <table id="benchmarkTable"></table>
+                                </div>
+                            </div>
+                        </div>
+                
                 <!-- QUERY -->
                 <div class="card">
                     <h2>Requête SELECT</h2>
@@ -301,6 +318,59 @@ public class UiRessource {
                             `${rows.length.toLocaleString()} ligne(s) retournée(s)`;
                         document.getElementById('resultsWrap').style.display = 'block';
                     }
+                    function renderBenchmark(results) {
+                                const table = document.getElementById('benchmarkTable');
+                                table.innerHTML = '';
+                
+                                if (!results.length) {
+                                    setStatus('benchmarkStatus', 'Aucun résultat.', 'info');
+                                    return;
+                                }
+                
+                                const headers = Object.keys(results[0]);
+                
+                                // Header
+                                const thead = table.createTHead();
+                                const hr = thead.insertRow();
+                                headers.forEach(h => {
+                                    const th = document.createElement('th');
+                                    th.textContent = h;
+                                    hr.appendChild(th);
+                                });
+                
+                                // Body
+                                const tbody = table.createTBody();
+                                results.forEach(row => {
+                                    const tr = tbody.insertRow();
+                                    headers.forEach(h => {
+                                        const td = tr.insertCell();
+                                        td.textContent = row[h];
+                                    });
+                                });
+                
+                                document.getElementById('benchmarkWrap').style.display = 'block';
+                            }
+                    
+                    async function runBenchmark() {
+                                setStatus('benchmarkStatus', 'Benchmark en cours...', 'info');
+                                document.getElementById('benchmarkWrap').style.display = 'none';
+                
+                                try {
+                                    const res = await fetch('/api/benchmark/series');
+                                    const data = await res.json();
+                
+                                    if (!res.ok) {
+                                        setStatus('benchmarkStatus', `Erreur : ${data.error}`, 'err');
+                                        return;
+                                    }
+                
+                                    renderBenchmark(data);
+                                    setStatus('benchmarkStatus', 'Benchmark terminé ✔️', 'ok');
+                
+                                } catch (e) {
+                                    setStatus('benchmarkStatus', 'Erreur réseau : ' + e.message, 'err');
+                                }
+                            }
                 </script>
             </body>
             </html>

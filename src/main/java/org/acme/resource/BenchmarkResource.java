@@ -38,6 +38,8 @@ public class BenchmarkResource {
 
         String tableName = "bench_" + System.nanoTime();
 
+        long beforeMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
         try {
             List<Column> columns = List.of(
                     col("id", DataType.LONG),
@@ -76,12 +78,16 @@ public class BenchmarkResource {
             }
 
             long insertMs = System.currentTimeMillis() - insertStart;
+            int effectiveRows = Math.min(rows, 1000);
+            //  Warmup JVM (important pour éviter des faux temps)
+            queryService.selectQuery(tableName, "SELECT * LIMIT  " + effectiveRows);
+            queryService.selectQuery(tableName, "SELECT * WHERE fare_amount > 50 LIMIT  " + effectiveRows);
 
             long selectMs = measureAvg(repeat, () ->
-                    queryService.selectQuery(tableName, "SELECT *"));
+                    queryService.selectQuery(tableName, "SELECT * LIMIT  " + effectiveRows));
 
             long whereMs = measureAvg(repeat, () ->
-                    queryService.selectQuery(tableName, "SELECT * WHERE fare_amount > 50"));
+                    queryService.selectQuery(tableName, "SELECT * WHERE fare_amount > 50 LIMIT  " + effectiveRows));
 
             long groupByMs = measureAvg(repeat, () ->
                     queryService.groupByCount(tableName, "payment_type"));
@@ -89,19 +95,29 @@ public class BenchmarkResource {
             long orderMs = measureAvg(repeat, () ->
                     queryService.selectQuery(tableName, "SELECT * ORDER BY fare_amount LIMIT 100"));
 
+
+
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("rows", rows);
-            result.put("repeat", repeat);
-            result.put("insertMs", insertMs);
-            result.put("selectMs", selectMs);
-            result.put("whereMs", whereMs);
-            result.put("groupByMs", groupByMs);
-            result.put("orderLimitMs", orderMs);
+
+            result.put("nombreLignes", rows);
+
+
+            result.put("tempsImportMs", insertMs);
+            result.put("tempsSelectMs", selectMs);
+            result.put("tempsWhereMs", whereMs);
+            result.put("tempsGroupByMs", groupByMs);
+            result.put("tempsOrderByMs", orderMs);
+
 
             logger.info(
-                    "Benchmark synthetic {} lignes → insert={}ms select={}ms where={}ms groupBy={}ms",
-                    rows, insertMs, selectMs, whereMs, groupByMs
+                    "Benchmark {} lignes → import={}ms scan={}ms filtre={}ms groupBy={}ms tri={}ms",
+                    rows, insertMs, selectMs, whereMs, groupByMs, orderMs
             );
+
+            long afterMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+            long usedMem = (afterMem - beforeMem) / (1024 * 1024);
+
+            result.put("memoireMB", usedMem);
 
             return Response.ok(result).build();
 
@@ -197,7 +213,7 @@ public class BenchmarkResource {
     @GET
     @Path("/series")
     public Response series(@QueryParam("repeat") @DefaultValue("3") int repeat) {
-        int[] sizes = {100_000, 500_000, 1_000_000, 2_000_000, 4_000_000};
+        int[] sizes = {100, 500, 1000};
         List<Map<String, Object>> results = new ArrayList<>();
 
         for (int size : sizes) {
