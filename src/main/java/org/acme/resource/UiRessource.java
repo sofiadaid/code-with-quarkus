@@ -60,16 +60,32 @@ public class UiRessource {
             <body>
                 <h1>Table Explorer</h1>
                 
-                <!-- IMPORT -->
-                <div class="card">
-                    <h2>Import Parquet</h2>
-                    <label>Nom de la table</label>
-                    <input type="text" id="tableName" placeholder="ex: taxi" />
-                    <label>Fichier .parquet</label>
-                    <input type="file" id="fileInput" accept=".parquet" />
-                    <button onclick="doImport()">Importer</button>
-                    <div id="importStatus"></div>
-                </div>
+                
+                       <!-- CRÉER UNE TABLE -->
+                               <div class="card">
+                                   <h2>1 — Créer une table</h2>
+                                   <label>Nom de la table</label>
+                                   <input type="text" id="createTableName" placeholder="ex: taxi" />
+                                   <p style="font-size:12px; color:#888; margin-bottom:10px;">
+                                       Les colonnes seront détectées automatiquement lors de l'import Parquet.
+                                   </p>
+                                   <button onclick="doCreateTable()">Créer</button>
+                                   <div id="createTableStatus"></div>
+                               </div>
+                            <button onclick="doCreateTable()">Créer la table</button>
+                            <div id="createTableStatus"></div>
+                        </div>
+                
+                        <!-- ÉTAPE 2 : IMPORTER UN FICHIER PARQUET -->
+                        <div class="card">
+                            <h2>2 — Importer un fichier Parquet</h2>
+                            <label>Nom de la table cible (doit exister)</label>
+                            <input type="text" id="importTableName" placeholder="ex: taxi" />
+                            <label>Fichier .parquet</label>
+                            <input type="file" id="fileInput" accept=".parquet" />
+                            <button onclick="doImport()">Importer</button>
+                            <div id="importStatus"></div>
+                        </div>
                 
                 <!-- APERCU TABLE -->
                         <div class="card">
@@ -131,6 +147,75 @@ public class UiRessource {
                         el.textContent = msg;
                         el.style.display = msg ? 'block' : 'none';
                     }
+
+                    async function doImport() {
+                        const table = document.getElementById('tableName').value.trim();
+                        const file = document.getElementById('fileInput').files[0];
+                        if (!table || !file) {
+                            setStatus('importStatus', 'Remplissez le nom et choisissez un fichier.', 'err');
+                            return;
+                        }
+                        setStatus('importStatus', 'Import en cours…', 'info');
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        try {
+                            const r = await fetch(`/api/tables/${table}/import`, { method: 'POST', body: fd });
+                            const d = await r.json();
+                            if (r.ok) setStatus('importStatus', `Succès ! ${d.inserted.toLocaleString()} lignes insérées.`, 'ok');
+                            else setStatus('importStatus', `Erreur : ${d.error}`, 'err');
+                        } catch(e) {
+                            setStatus('importStatus', 'Erreur réseau : ' + e.message, 'err');
+                        }
+                    }
+                    
+                    
+                    async function doCreateTable() {
+                                const name = document.getElementById('createTableName').value.trim();
+                                if (!name) {
+                                    setStatus('createTableStatus', 'Entrez un nom de table.', 'err');
+                                    return;
+                                }
+                                setStatus('createTableStatus', 'Création…', 'info');
+                                try {
+                                    const r = await fetch(`/api/tables/${name}/create`, { method: 'POST' });
+                                    const d = await r.json();
+                                    if (r.ok) {
+                                        setStatus('createTableStatus', `Table "${name}" créée.`, 'ok');
+                                        document.getElementById('importTableName').value = name;
+                                    } else {
+                                        setStatus('createTableStatus', `Erreur : ${d.error}`, 'err');
+                                    }
+                                } catch(e) {
+                                    setStatus('createTableStatus', 'Erreur réseau : ' + e.message, 'err');
+                                }
+                            }
+                
+                          
+                                    async function doImport() {
+                                        const table = document.getElementById('importTableName').value.trim();
+                                        const file  = document.getElementById('fileInput').files[0];
+                                        if (!table || !file) {
+                                            setStatus('importStatus', 'Remplissez le nom et choisissez un fichier.', 'err');
+                                            return;
+                                        }
+                                        setStatus('importStatus', 'Import en cours…', 'info');
+                                        const fd = new FormData();
+                                        fd.append('file', file);
+                                        try {
+                                            const r = await fetch(`/api/tables/${table}/import`, { method: 'POST', body: fd });
+                                            const d = await r.json();
+                                            if (r.ok) {
+                                                const msg = `Succès ! ${d.inserted.toLocaleString()} lignes — `
+                                                          + `${d.loadTimeMs} ms — `
+                                                          + `${(d.rowsPerSecond ?? 0).toLocaleString()} lignes/s`;
+                                                setStatus('importStatus', msg, 'ok');
+                                            } else {
+                                                setStatus('importStatus', `Erreur : ${d.error}`, 'err');
+                                            }
+                                        } catch(e) {
+                                            setStatus('importStatus', 'Erreur réseau : ' + e.message, 'err');
+                                        }
+                                    }
                     
                     async function doPreview() {
                                 const table = document.getElementById('previewTable').value.trim();
@@ -199,26 +284,6 @@ public class UiRessource {
                                     `Table "${tableName}" — ${rows.length.toLocaleString()} ligne(s) affichée(s)`;
                                 document.getElementById('previewWrap').style.display = 'block';
                             }
-
-                    async function doImport() {
-                        const table = document.getElementById('tableName').value.trim();
-                        const file = document.getElementById('fileInput').files[0];
-                        if (!table || !file) {
-                            setStatus('importStatus', 'Remplissez le nom et choisissez un fichier.', 'err');
-                            return;
-                        }
-                        setStatus('importStatus', 'Import en cours…', 'info');
-                        const fd = new FormData();
-                        fd.append('file', file);
-                        try {
-                            const r = await fetch(`/api/tables/${table}/import`, { method: 'POST', body: fd });
-                            const d = await r.json();
-                            if (r.ok) setStatus('importStatus', `Succès ! ${d.inserted.toLocaleString()} lignes insérées.`, 'ok');
-                            else setStatus('importStatus', `Erreur : ${d.error}`, 'err');
-                        } catch(e) {
-                            setStatus('importStatus', 'Erreur réseau : ' + e.message, 'err');
-                        }
-                    }
 
                     async function doQuery() {
                         const table = document.getElementById('queryTable').value.trim();

@@ -320,6 +320,25 @@ public class TableRegistry {
     }
 
 
+    public Table createEmpty(String name) {
+        if (StringUtils.isBlank(name)) {
+            throw new IllegalArgumentException("Table name is required");
+        }
+        String normalized = normalize(name);
+        Table table = new Table();
+        table.name = normalized;
+        table.columns = new ArrayList<>();
+        table.colIndex = new HashMap<>();
+        Table previous = tables.putIfAbsent(normalized, table);
+        if (previous != null) {
+            throw new IllegalStateException("Table already exists: " + normalized);
+        }
+        return table;
+    }
+
+
+
+
 }
 
 

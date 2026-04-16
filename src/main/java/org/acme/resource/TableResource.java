@@ -132,4 +132,19 @@ public class TableResource {
         }
     }
 
+    @POST
+    @Path("/{name}/create")
+    public Response createEmpty(@PathParam("name") String name) {
+        try {
+            Table created = registry.createEmpty(name);
+            return Response.status(Response.Status.CREATED)
+                    .entity(Map.of("name", created.name, "message", "Table créée"))
+                    .build();
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage())).build();
+        }
+    }
+
+
 }
