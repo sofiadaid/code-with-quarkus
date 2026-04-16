@@ -133,39 +133,43 @@ public class UiRessource {
                     }
                     
                     async function doPreview() {
-                                const table = document.getElementById('previewTable').value.trim();
-                                const limit = document.getElementById('previewLimit').value;
-                                if (!table) {
-                                    setStatus('previewStatus', 'Entrez le nom de la table.', 'err');
-                                    return;
-                                }
-                                setStatus('previewStatus', 'Chargement…', 'info');
-                                document.getElementById('previewWrap').style.display = 'none';
-                                try {
-                                    // 1. Récupère le schéma de la table
-                                    const schemaRes = await fetch(`/api/tables/${table}`);
-                                    const schema = await schemaRes.json();
-                                    if (!schemaRes.ok) {
-                                        setStatus('previewStatus', `Erreur : ${schema.error}`, 'err');
-                                        return;
-                                    }
-                                    const colNames = schema.columns.map(c => c.name);
+                                         const limit = document.getElementById('previewLimit').value;
+                                         const file = document.getElementById('fileInput').files[0];
                 
-                                    // 2. Récupère les lignes
-                                    const rowsRes = await fetch(`/api/tables/${table}/rows?offset=0&limit=${limit}`);
-                                    const rows = await rowsRes.json();
-                                    if (!rowsRes.ok) {
-                                        setStatus('previewStatus', `Erreur : ${rows.error}`, 'err');
-                                        return;
-                                    }
+                                         if (!file) {
+                                             setStatus('previewStatus', 'Choisissez un fichier parquet.', 'err');
+                                             return;
+                                         }
                 
-                                    renderPreview(colNames, rows, table);
-                                    setStatus('previewStatus', '', '');
+                                         setStatus('previewStatus', 'Chargement…', 'info');
+                                         document.getElementById('previewWrap').style.display = 'none';
                 
-                                } catch(e) {
-                                    setStatus('previewStatus', 'Erreur réseau : ' + e.message, 'err');
-                                }
-                            }
+                                         try {
+                                             const fd = new FormData();
+                                             fd.append('file', file);
+                
+                                             const rowsRes = await fetch(`/api/tables/preview?limit=${limit}`, {
+                                                 method: 'POST',
+                                                 body: fd
+                                             });
+                
+                                             const rows = await rowsRes.json();
+                
+                                             if (!rowsRes.ok) {
+                                                 setStatus('previewStatus', `Erreur : ${rows.error}`, 'err');
+                                                 return;
+                                             }
+                
+                                             //  génération automatique des colonnes
+                                             const colNames = rows[0]?.map((_, i) => "col_" + i) || [];
+                
+                                             renderPreview(colNames, rows, "preview");
+                                             setStatus('previewStatus', '', '');
+                
+                                         } catch(e) {
+                                             setStatus('previewStatus', 'Erreur réseau : ' + e.message, 'err');
+                                         }
+                                     }
                 
                             function renderPreview(colNames, rows, tableName) {
                                 if (!rows.length) {

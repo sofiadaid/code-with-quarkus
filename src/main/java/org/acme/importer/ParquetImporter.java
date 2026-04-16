@@ -201,4 +201,93 @@ public class ParquetImporter {
                 return group.getValueToString(colIndex, 0);
         }
     }
+
+    public static List<Object[]> previewParquet(File file, int limit) throws IOException {
+        List<Object[]> preview = new ArrayList<>();
+        int count = 0;
+
+        InputFile inputFile = new InputFile() {
+            @Override
+            public long getLength() {
+                return file.length();
+            }
+
+            @Override
+            public SeekableInputStream newStream() throws IOException {
+                RandomAccessFile raf = new RandomAccessFile(file, "r");
+                FileInputStream fis = new FileInputStream(raf.getFD());
+
+                return new DelegatingSeekableInputStream(fis) {
+                    @Override
+                    public long getPos() throws IOException {
+                        return raf.getFilePointer();
+                    }
+
+                    @Override
+                    public void seek(long newPos) throws IOException {
+                        raf.seek(newPos);
+                    }
+
+                    @Override
+                    public void readFully(byte[] bytes) throws IOException {
+                        raf.readFully(bytes);
+                    }
+
+                    @Override
+                    public void readFully(byte[] bytes, int start, int len) throws IOException {
+                        raf.readFully(bytes, start, len);
+                    }
+
+                    @Override
+                    public int read(ByteBuffer byteBuffer) throws IOException {
+                        byte[] buffer = new byte[byteBuffer.remaining()];
+                        int read = raf.read(buffer);
+                        if (read > 0) {
+                            byteBuffer.put(buffer, 0, read);
+                        }
+                        return read;
+                    }
+
+                    @Override
+                    public void readFully(ByteBuffer byteBuffer) throws IOException {
+                        byte[] buffer = new byte[byteBuffer.remaining()];
+                        raf.readFully(buffer);
+                        byteBuffer.put(buffer);
+                    }
+
+                    @Override
+                    public void close() throws IOException {
+                        fis.close();
+                        raf.close();
+                    }
+                };
+            }
+        };
+
+        try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
+            MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+            MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
+            PageReadStore pages;
+
+            while ((pages = reader.readNextRowGroup()) != null && count < limit) {
+                long rowCount = pages.getRowCount();
+                RecordReader<Group> recordReader =
+                        columnIO.getRecordReader(pages, new GroupRecordConverter(schema));
+
+                for (int i = 0; i < rowCount && count < limit; i++) {
+                    Group group = recordReader.read();
+                    Object[] row = new Object[schema.getFieldCount()];
+
+                    for (int col = 0; col < schema.getFieldCount(); col++) {
+                        row[col] = group.getValueToString(col, 0);
+                    }
+
+                    preview.add(row);
+                    count++;
+                }
+            }
+        }
+
+        return preview;
+    }
 }

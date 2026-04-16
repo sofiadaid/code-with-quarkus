@@ -360,4 +360,30 @@ public class TableResource {
         public List<String> columns;
         public Filter filter;
     }
+
+    @POST
+    @Path("/preview")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response previewParquet(@RestForm("file") FileUpload fileUpload,
+                                   @QueryParam("limit") @DefaultValue("10") int limit) {
+        try {
+            if (fileUpload == null) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "Missing file"))
+                        .build();
+            }
+
+            File file = fileUpload.uploadedFile().toFile();
+
+            List<Object[]> preview = ParquetImporter.previewParquet(file, limit);
+
+            return Response.ok(preview).build();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
 }
