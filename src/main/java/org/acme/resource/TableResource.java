@@ -126,21 +126,42 @@ public class TableResource {
     public Response query(@PathParam("name") String name,
                           @QueryParam("q") String query) {
         try {
+            System.out.println("========== QUERY DEBUG ==========");
+            System.out.println("TABLE = " + name);
+            System.out.println("RAW QUERY = " + query);
+
             if (query == null || query.isBlank()) {
+                System.out.println("ERROR: q parameter is missing");
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity(Map.of("error", "q parameter is required"))
                         .build();
             }
 
-            return Response.ok(queryService.selectQuery(name, query)).build();
+            List<List<Object>> result = queryService.selectQuery(name, query);
+
+            System.out.println("RESULT SIZE = " + result.size());
+            if (!result.isEmpty()) {
+                System.out.println("FIRST ROW = " + result.get(0));
+            }
+            System.out.println("================================");
+
+            return Response.ok(result).build();
 
         } catch (IllegalArgumentException e) {
+            e.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
         } catch (IllegalStateException e) {
+            e.printStackTrace();
             return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
         }
@@ -208,6 +229,120 @@ public class TableResource {
             }
 
             return Response.ok(queryService.groupByCount(name, column)).build();
+
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{name}/aggregate")
+    public Response aggregate(@PathParam("name") String name,
+                              @QueryParam("function") String function,
+                              @QueryParam("column") String column) {
+        try {
+            if (function == null || function.isBlank()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "function parameter is required"))
+                        .build();
+            }
+
+            Object result;
+
+            switch (function.trim().toUpperCase()) {
+                case "COUNT":
+                    result = queryService.count(name, column);
+                    break;
+                case "MIN":
+                    result = queryService.min(name, column);
+                    break;
+                case "MAX":
+                    result = queryService.max(name, column);
+                    break;
+                case "SUM":
+                    result = queryService.sum(name, column);
+                    break;
+                case "AVG":
+                case "MEAN":
+                    result = queryService.avg(name, column);
+                    break;
+                default:
+                    return Response.status(Response.Status.BAD_REQUEST)
+                            .entity(Map.of("error", "Unsupported aggregate function: " + function))
+                            .build();
+            }
+
+            return Response.ok(Map.of(
+                    "table", name,
+                    "function", function.toUpperCase(),
+                    "column", column,
+                    "result", result
+            )).build();
+
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+
+        } catch (IllegalStateException e) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{name}/group-by/aggregate")
+    public Response groupByAggregate(@PathParam("name") String name,
+                                     @QueryParam("groupBy") String groupBy,
+                                     @QueryParam("function") String function,
+                                     @QueryParam("column") String column) {
+        try {
+            if (groupBy == null || groupBy.isBlank()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "groupBy parameter is required"))
+                        .build();
+            }
+
+            if (function == null || function.isBlank()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "function parameter is required"))
+                        .build();
+            }
+
+            List<List<Object>> result;
+
+            switch (function.trim().toUpperCase()) {
+                case "COUNT":
+                    result = queryService.groupByCount(name, groupBy);
+                    break;
+                case "MIN":
+                    result = queryService.groupByMin(name, groupBy, column);
+                    break;
+                case "MAX":
+                    result = queryService.groupByMax(name, groupBy, column);
+                    break;
+                case "SUM":
+                    result = queryService.groupBySum(name, groupBy, column);
+                    break;
+                case "AVG":
+                case "MEAN":
+                    result = queryService.groupByAvg(name, groupBy, column);
+                    break;
+                default:
+                    return Response.status(Response.Status.BAD_REQUEST)
+                            .entity(Map.of("error", "Unsupported aggregate function: " + function))
+                            .build();
+            }
+
+            return Response.ok(result).build();
 
         } catch (IllegalArgumentException e) {
             return Response.status(Response.Status.BAD_REQUEST)
