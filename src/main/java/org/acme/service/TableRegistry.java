@@ -22,11 +22,6 @@ public class TableRegistry {
         if (table == null || StringUtils.isBlank(table.getName())) {
             throw new IllegalArgumentException("Table name is required");
         }
-
-        if (CollectionUtils.isEmpty(table.getColumns())) {
-            throw new IllegalArgumentException("At least one column is required");
-        }
-
         String name = normalize(table.getName());
         table.setName(name);
         table.buildIndex();

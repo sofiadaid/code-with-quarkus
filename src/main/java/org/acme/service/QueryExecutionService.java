@@ -59,8 +59,7 @@ public class QueryExecutionService {
         selectPart = afterSelect.trim();
 
         List<String> selectedColumns = resolveSelectedColumns(table, selectPart);
-
-        List<Integer> matchingRowIndexes = collectMatchingRowIndexes(table, wherePart);
+        List<Integer> matchingRowIndexes = collectMatchingRowIndexes(table, wherePart, limitValue, orderByPart);
 
         if (orderByPart != null && !orderByPart.isBlank()) {
             applyOrderBy(table, matchingRowIndexes, orderByPart);
@@ -104,17 +103,22 @@ public class QueryExecutionService {
             throw new IllegalArgumentException("Filter column is required");
         }
 
-        if (!table.getData().containsKey(filterColumn.trim())) {
+        String trimmedFilterColumn = filterColumn.trim();
+
+        if (!table.getData().containsKey(trimmedFilterColumn)) {
             throw new IllegalArgumentException("Unknown column in WHERE: " + filterColumn);
         }
 
-        List<Integer> matchingRowIndexes = new ArrayList<>();
-        int rowCount = table.rowCount();
+        List<Integer> matchingRowIndexes = tryIndexedFilter(table, trimmedFilterColumn, filter);
+        if (matchingRowIndexes == null) {
+            matchingRowIndexes = new ArrayList<>();
+            int rowCount = table.rowCount();
 
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-            Object value = getCellValue(table, filterColumn.trim(), rowIndex);
-            if (matchFilter(value, filter)) {
-                matchingRowIndexes.add(rowIndex);
+            for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+                Object value = getCellValue(table, trimmedFilterColumn, rowIndex);
+                if (matchFilter(value, filter)) {
+                    matchingRowIndexes.add(rowIndex);
+                }
             }
         }
 
@@ -353,17 +357,142 @@ public class QueryExecutionService {
         return validated;
     }
 
-    private List<Integer> collectMatchingRowIndexes(Table table, String wherePart) {
+    private List<Integer> collectMatchingRowIndexes(Table table, String wherePart, int limitValue, String orderByPart) {
+        if (wherePart == null || wherePart.isBlank()) {
+            return allRowIndexes(table);
+        }
+
+        List<Integer> indexedResult = tryIndexedWhere(table, wherePart);
+        if (indexedResult != null) {
+            return indexedResult;
+        }
+
         List<Integer> rowIndexes = new ArrayList<>();
         int rowCount = table.rowCount();
+        boolean canStopEarly = limitValue > 0 && (orderByPart == null || orderByPart.isBlank());
 
         for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-            if (wherePart == null || wherePart.isBlank() || matchesWhere(table, rowIndex, wherePart)) {
+            if (matchesWhere(table, rowIndex, wherePart)) {
                 rowIndexes.add(rowIndex);
+
+                if (canStopEarly && rowIndexes.size() >= limitValue) {
+                    break;
+                }
             }
         }
 
         return rowIndexes;
+    }
+
+    private List<Integer> tryIndexedWhere(Table table, String condition) {
+        ParsedSimpleCondition parsed = parseIndexedEqualityCondition(condition);
+        if (parsed == null) {
+            return null;
+        }
+
+        if (!table.isIndexed(parsed.columnName)) {
+            return null;
+        }
+
+        Map<Object, List<Integer>> columnIndex = table.getIndexForColumn(parsed.columnName);
+        if (columnIndex == null) {
+            return null;
+        }
+
+        Object normalizedValue = normalizeIndexedValue(table, parsed.columnName, parsed.rawValue);
+        List<Integer> hits = columnIndex.get(normalizedValue);
+
+        return hits == null ? new ArrayList<>() : new ArrayList<>(hits);
+    }
+
+    private List<Integer> tryIndexedFilter(Table table, String filterColumn, Filter filter) {
+        if (!table.isIndexed(filterColumn)) {
+            return null;
+        }
+
+        if (!"=".equals(filter.getOperator())) {
+            return null;
+        }
+
+        Map<Object, List<Integer>> columnIndex = table.getIndexForColumn(filterColumn);
+        if (columnIndex == null) {
+            return null;
+        }
+
+        List<Integer> hits = columnIndex.get(filter.getValue());
+        return hits == null ? new ArrayList<>() : new ArrayList<>(hits);
+    }
+
+    private ParsedSimpleCondition parseIndexedEqualityCondition(String condition) {
+        if (condition == null || condition.isBlank()) {
+            return null;
+        }
+
+        String trimmed = condition.trim();
+
+        if (trimmed.toUpperCase().contains(" LIKE ")) {
+            return null;
+        }
+
+        int eqIdx = trimmed.indexOf('=');
+        if (eqIdx == -1) {
+            return null;
+        }
+
+        if (trimmed.contains(">=") || trimmed.contains("<=") || trimmed.contains("!=")) {
+            return null;
+        }
+
+        if (trimmed.contains(">") || trimmed.contains("<")) {
+            return null;
+        }
+
+        String colName = trimmed.substring(0, eqIdx).trim();
+        String rawValue = trimmed.substring(eqIdx + 1).trim().replaceAll("^'|'$", "");
+
+        if (colName.isBlank()) {
+            return null;
+        }
+
+        return new ParsedSimpleCondition(colName, rawValue);
+    }
+
+    private Object normalizeIndexedValue(Table table, String columnName, String rawValue) {
+        List<Object> values = table.getData().get(columnName);
+        if (values == null || values.isEmpty()) {
+            return rawValue;
+        }
+
+        Object sample = null;
+        for (Object value : values) {
+            if (value != null) {
+                sample = value;
+                break;
+            }
+        }
+
+        if (sample == null) {
+            return rawValue;
+        }
+
+        try {
+            if (sample instanceof Integer) {
+                return Integer.parseInt(rawValue);
+            }
+            if (sample instanceof Long) {
+                return Long.parseLong(rawValue);
+            }
+            if (sample instanceof Double) {
+                return Double.parseDouble(rawValue);
+            }
+            if (sample instanceof Float) {
+                return Float.parseFloat(rawValue);
+            }
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid indexed value for column " + columnName + ": " + rawValue);
+        }
+
+        return rawValue;
     }
 
     private void applyOrderBy(Table table, List<Integer> rowIndexes, String orderByPart) {
@@ -571,5 +700,14 @@ public class QueryExecutionService {
             indexes.add(i);
         }
         return indexes;
+    }
+    private static class ParsedSimpleCondition {
+        private final String columnName;
+        private final String rawValue;
+
+        private ParsedSimpleCondition(String columnName, String rawValue) {
+            this.columnName = columnName;
+            this.rawValue = rawValue;
+        }
     }
 }

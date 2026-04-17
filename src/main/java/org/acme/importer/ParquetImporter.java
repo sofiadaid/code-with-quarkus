@@ -91,10 +91,27 @@ public class ParquetImporter {
         try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
             MessageType schema = reader.getFooter().getFileMetaData().getSchema();
 
+            // APRÈS
             Table table = registry.get(tableName).orElseGet(() -> {
                 Table newTable = new Table(tableName, inferColumns(schema));
+
+                if (newTable.getData().containsKey("payment_type")) {
+                    newTable.addIndexedColumn("payment_type");
+                }
+                if (newTable.getData().containsKey("vendor_id")) {
+                    newTable.addIndexedColumn("vendor_id");
+                }
+
                 return registry.create(newTable);
             });
+
+// Si la table existe mais est vide (créée sans colonnes), on injecte le schéma Parquet
+            if (table.getColumns().isEmpty()) {
+                List<Column> inferredColumns = inferColumns(schema);
+                table.setColumns(inferredColumns);
+                table.buildIndex();
+                table.initializeStorage();
+            }
 
             List<Column> columns = table.getColumns();
 
@@ -104,24 +121,24 @@ public class ParquetImporter {
                                 + " Table=" + columns.size()
                 );
             }
-
             MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
             PageReadStore pages;
 
+            org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName[] primitiveTypes =
+                    new org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName[columns.size()];
+
+            for (int col = 0; col < columns.size(); col++) {
+                Type field = schema.getFields().get(col);
+                primitiveTypes[col] = field.isPrimitive()
+                        ? field.asPrimitiveType().getPrimitiveTypeName()
+                        : null;
+            }
+
             while ((pages = reader.readNextRowGroup()) != null) {
                 long rowCount = pages.getRowCount();
+
                 RecordReader<Group> recordReader =
                         columnIO.getRecordReader(pages, new GroupRecordConverter(schema));
-
-                org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName[] primitiveTypes =
-                        new org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName[columns.size()];
-
-                for (int col = 0; col < columns.size(); col++) {
-                    Type field = schema.getFields().get(col);
-                    primitiveTypes[col] = field.isPrimitive()
-                            ? field.asPrimitiveType().getPrimitiveTypeName()
-                            : null;
-                }
 
                 for (int i = 0; i < rowCount; i++) {
                     Group group = recordReader.read();
@@ -133,6 +150,10 @@ public class ParquetImporter {
 
                     table.addRow(row);
                     totalInserted++;
+
+                    if (totalInserted % 100_000 == 0) {
+                        System.out.println("Imported rows: " + totalInserted);
+                    }
                 }
             }
         }
@@ -158,21 +179,14 @@ public class ParquetImporter {
             return DataType.STRING;
         }
 
-        switch (field.asPrimitiveType().getPrimitiveTypeName()) {
-            case INT32:
-                return DataType.INT;
-            case INT64:
-                return DataType.LONG;
-            case DOUBLE:
-                return DataType.DOUBLE;
-            case FLOAT:
-                return DataType.DOUBLE;
-            case BINARY:
-            case FIXED_LEN_BYTE_ARRAY:
-                return DataType.STRING;
-            default:
-                return DataType.STRING;
-        }
+        return switch (field.asPrimitiveType().getPrimitiveTypeName()) {
+            case INT32 -> DataType.INT;
+            case INT64 -> DataType.LONG;
+            case DOUBLE -> DataType.DOUBLE;
+            case FLOAT -> DataType.DOUBLE;
+            case BINARY, FIXED_LEN_BYTE_ARRAY -> DataType.STRING;
+            default -> DataType.STRING;
+        };
     }
 
     private static Object readValue(
@@ -185,21 +199,18 @@ public class ParquetImporter {
             return null;
         }
 
-        switch (column.getType()) {
-            case INT:
-                return group.getInteger(colIndex, 0);
-            case LONG:
-                return group.getLong(colIndex, 0);
-            case DOUBLE:
+        return switch (column.getType()) {
+            case INT -> group.getInteger(colIndex, 0);
+            case LONG -> group.getLong(colIndex, 0);
+            case DOUBLE -> {
                 if (primitiveType == org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FLOAT) {
-                    return (double) group.getFloat(colIndex, 0);
+                    yield (double) group.getFloat(colIndex, 0);
                 }
-                return group.getDouble(colIndex, 0);
-            case STRING:
-                return group.getValueToString(colIndex, 0);
-            default:
-                return group.getValueToString(colIndex, 0);
-        }
+                yield group.getDouble(colIndex, 0);
+            }
+            case STRING -> group.getValueToString(colIndex, 0);
+            default -> group.getValueToString(colIndex, 0);
+        };
     }
 
     public static List<Object[]> previewParquet(File file, int limit) throws IOException {
