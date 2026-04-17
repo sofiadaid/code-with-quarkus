@@ -83,6 +83,17 @@ public class UiRessource {
                     }
                     tr:last-child td { border-bottom: none; }
                     tr:hover td { background: #fafafa; }
+                    .timer {
+                        font-size: 13px;
+                        font-variant-numeric: tabular-nums;
+                        color: #555;
+                        margin-top: 8px;
+                        display: none;
+                    }
+                    .timer span {
+                        font-weight: 600;
+                        color: #1a1a1a;
+                    }
                 </style>
             </head>
             <body>
@@ -107,6 +118,7 @@ public class UiRessource {
                     <label>Fichier .parquet</label>
                     <input type="file" id="fileInput" accept=".parquet" />
                     <button onclick="doImport()">Importer</button>
+                    <div id="importTimer" class="timer">⏱ Temps écoulé : <span id="importTimerValue">0.0s</span></div>
                     <div id="importStatus"></div>
                 </div>
 
@@ -169,6 +181,32 @@ public class UiRessource {
                 </div>
 
                 <script>
+                    // --- Timer utilitaire ---
+                    let importTimerInterval = null;
+
+                    function startTimer(displayId, valueId) {
+                        const display = document.getElementById(displayId);
+                        const valueEl = document.getElementById(valueId);
+                        const start = Date.now();
+                        display.style.display = 'block';
+                        valueEl.textContent = '0.0s';
+                        importTimerInterval = setInterval(() => {
+                            const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+                            valueEl.textContent = elapsed + 's';
+                        }, 100);
+                        return start;
+                    }
+
+                    function stopTimer(displayId, valueId, startTime) {
+                        clearInterval(importTimerInterval);
+                        importTimerInterval = null;
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                        document.getElementById(valueId).textContent = elapsed + 's';
+                        return elapsed;
+                    }
+
+                    // --- Fin timer ---
+
                     function setQ(q) {
                         document.getElementById('queryInput').value = q;
                     }
@@ -229,6 +267,7 @@ public class UiRessource {
                         }
 
                         setStatus('importStatus', 'Import en cours…', 'info');
+                        const timerStart = startTimer('importTimer', 'importTimerValue');
 
                         const fd = new FormData();
                         fd.append('file', file);
@@ -239,14 +278,16 @@ public class UiRessource {
                                 body: fd
                             });
 
+                            const elapsed = stopTimer('importTimer', 'importTimerValue', timerStart);
                             const d = await r.json();
 
                             if (r.ok) {
-                                setStatus('importStatus', `Succès ! ${d.inserted.toLocaleString()} lignes insérées.`, 'ok');
+                                setStatus('importStatus', `Succès ! ${d.inserted.toLocaleString()} lignes insérées en ${elapsed}s.`, 'ok');
                             } else {
                                 setStatus('importStatus', `Erreur : ${d.error}`, 'err');
                             }
                         } catch (e) {
+                            stopTimer('importTimer', 'importTimerValue', timerStart);
                             setStatus('importStatus', 'Erreur réseau : ' + e.message, 'err');
                         }
                     }
@@ -484,27 +525,31 @@ public class UiRessource {
                                 body: fd
                             });
 
-                            const data = await res.json();
+                            const raw = await res.text();
+                            let data;
+                            try {
+                                data = JSON.parse(raw);
+                            } catch {
+                                setStatus('benchmarkStatus', `Réponse invalide du serveur : ${raw.substring(0, 200)}`, 'err');
+                                return;
+                            }
 
                             if (!res.ok) {
-                                setStatus('benchmarkStatus', `Erreur : ${data.error}`, 'err');
+                                setStatus('benchmarkStatus', `Erreur : ${data.error ?? JSON.stringify(data)}`, 'err');
                                 return;
                             }
 
                             resultDiv.innerHTML = `
                                 <table>
                                     <thead>
-                                        <tr>
-                                            <th>Metric</th>
-                                            <th>Value</th>
-                                        </tr>
+                                        <tr><th>Metric</th><th>Value</th></tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td>Rows</td><td>${data.rows}</td></tr>
-                                        <tr><td>Load (ms)</td><td>${data.loadMs}</td></tr>
-                                        <tr><td>Select (ms)</td><td>${data.selectMs}</td></tr>
-                                        ${data.whereMs ? `<tr><td>Where (ms)</td><td>${data.whereMs}</td></tr>` : ""}
-                                        ${data.groupByMs ? `<tr><td>GroupBy (ms)</td><td>${data.groupByMs}</td></tr>` : ""}
+                                        <tr><td>Rows</td><td>${data.rows ?? '—'}</td></tr>
+                                        <tr><td>Load (ms)</td><td>${data.loadMs ?? '—'}</td></tr>
+                                        <tr><td>Select (ms)</td><td>${data.selectMs ?? '—'}</td></tr>
+                                        ${data.whereMs != null ? `<tr><td>Where (ms)</td><td>${data.whereMs}</td></tr>` : ""}
+                                        ${data.groupByMs != null ? `<tr><td>GroupBy (ms)</td><td>${data.groupByMs}</td></tr>` : ""}
                                     </tbody>
                                 </table>
                             `;
