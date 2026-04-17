@@ -145,14 +145,11 @@ public class UiRessource {
 
                 <div class="card">
                             <h2>Benchmark</h2>
-                
                             <div style="display:flex; gap:10px;">
                                 <button onclick="runBenchmark()">Benchmark synthétique</button>
                                 <button onclick="runRealBenchmark()">Benchmark réel</button>
                             </div>
-                
                             <div id="benchmarkStatus"></div>
-                
                             <div id="benchmarkWrap" style="margin-top:16px; display:none;">
                                 <div class="overflow">
                                     <table id="benchmarkTable"></table>
@@ -160,7 +157,6 @@ public class UiRessource {
                             </div>
                             <div id="realBenchmarkResult" style="margin-top:16px;"></div>
                         </div>
-                
                 <!-- QUERY -->
                 <div class="card">
                     <h2>Requête SELECT</h2>
