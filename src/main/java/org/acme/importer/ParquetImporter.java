@@ -98,6 +98,20 @@ public class ParquetImporter {
                 return registry.create(newTable);
             });
 
+// Si la table existe mais est vide (créée sans colonnes), on injecte le schéma Parquet
+            if (table.getColumns() == null || table.getColumns().isEmpty()) {
+                table.setColumns(inferColumns(schema));
+                // buildIndex() et initializeStorage() sont appelés automatiquement par setColumns()
+            }
+
+// Si la table existe mais est vide (créée sans colonnes), on injecte le schéma Parquet
+            if (table.getColumns().isEmpty()) {
+                List<Column> inferredColumns = inferColumns(schema);
+                table.setColumns(inferredColumns);
+                table.buildIndex();
+                table.initializeStorage();
+            }
+
             List<Column> columns = table.getColumns();
 
             if (schema.getFieldCount() != columns.size()) {
@@ -106,7 +120,6 @@ public class ParquetImporter {
                                 + " Table=" + columns.size()
                 );
             }
-
             MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
             PageReadStore pages;
 

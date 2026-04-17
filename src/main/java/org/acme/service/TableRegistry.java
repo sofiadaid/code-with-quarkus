@@ -19,19 +19,18 @@ public class TableRegistry {
     private final Map<String, Table> tables = new ConcurrentHashMap<>();
 
     public Table create(Table table) {
+        // APRÈS
         if (table == null || StringUtils.isBlank(table.getName())) {
             throw new IllegalArgumentException("Table name is required");
-        }
-
-        if (CollectionUtils.isEmpty(table.getColumns())) {
-            throw new IllegalArgumentException("At least one column is required");
         }
 
         String name = normalize(table.getName());
         table.setName(name);
         table.buildIndex();
         table.initializeStorage();
-
+        if (table.getColumns() == null) {
+            table.setColumns(new ArrayList<>());
+        }
         Table previous = tables.putIfAbsent(name, table);
         if (previous != null) {
             throw new IllegalStateException("Table already exists: " + name);
