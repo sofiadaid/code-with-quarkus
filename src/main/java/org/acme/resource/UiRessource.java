@@ -113,6 +113,11 @@ public class UiRessource {
                 <div class="card">
                             <h2>Benchmark</h2>
                 
+                
+                            <!-- Deux types de benchmark :
+                                             - Synthétique : données générées automatiquement
+                                             - Réel : fichier parquet utilisateur -->
+                                             
                             <div style="display:flex; gap:10px;">
                                 <button onclick="runBenchmark()">Benchmark synthétique</button>
                                 <button onclick="runRealBenchmark()">Benchmark réel</button>
@@ -120,6 +125,7 @@ public class UiRessource {
                 
                             <div id="benchmarkStatus"></div>
                 
+                            <!-- Tableau des résultats du benchmark synthétique -->
                             <div id="benchmarkWrap" style="margin-top:16px; display:none;">
                                 <div class="overflow">
                                     <table id="benchmarkTable"></table>
@@ -127,6 +133,8 @@ public class UiRessource {
                             </div>
                             <div id="realBenchmarkResult" style="margin-top:16px;"></div>
                         </div>
+                
+                
                 
                 <!-- QUERY -->
                 <div class="card">
@@ -336,15 +344,20 @@ public class UiRessource {
                             `${rows.length.toLocaleString()} ligne(s) retournée(s)`;
                         document.getElementById('resultsWrap').style.display = 'block';
                     }
+                    
+                    
+                    // Génère dynamiquement un tableau HTML avec les résultats du benchmark
                     function renderBenchmark(results) {
                                 const table = document.getElementById('benchmarkTable');
-                                table.innerHTML = '';
+                                table.innerHTML = '';  // reset du tableau
                 
+                                // Si aucun résultat
                                 if (!results.length) {
                                     setStatus('benchmarkStatus', 'Aucun résultat.', 'info');
                                     return;
                                 }
                 
+                                // Récupère les noms des colonnes à partir du premier objet
                                 const headers = Object.keys(results[0]);
                 
                                 // Header
@@ -365,16 +378,21 @@ public class UiRessource {
                                         td.textContent = row[h];
                                     });
                                 });
-                
+                                
+                                // Affiche le tableau
                                 document.getElementById('benchmarkWrap').style.display = 'block';
                             }
                     
+                    // Lance un benchmark sur des données générées côté backend
                     async function runBenchmark() {
                                 setStatus('benchmarkStatus', 'Benchmark en cours...', 'info');
+                                // Cache le tableau pendant le chargement
                                 document.getElementById('benchmarkWrap').style.display = 'none';
                 
                                 try {
+                                    // Appel à l'API backend qui exécute plusieurs tests (100, 500, 1000 lignes...)
                                     const res = await fetch('/api/benchmark/series');
+                                    // Conversion de la réponse en JSON
                                     const data = await res.json();
                 
                                     if (!res.ok) {
@@ -382,6 +400,7 @@ public class UiRessource {
                                         return;
                                     }
                 
+                                    // Affichage des résultats dans un tableau
                                     renderBenchmark(data);
                                     setStatus('benchmarkStatus', 'Benchmark terminé ', 'ok');
                 
@@ -390,8 +409,11 @@ public class UiRessource {
                                 }
                             }
                             
+                            // Lance un benchmark sur un vrai fichier parquet fourni par l'utilisateur
                             async function runRealBenchmark() {
+                                        // Récupère le fichier sélectionné
                                         const file = document.getElementById('fileInput').files[0];
+                                        // Zone où afficher le résultat
                                         const resultDiv = document.getElementById('realBenchmarkResult');
                 
                                         if (!file) {
@@ -399,13 +421,16 @@ public class UiRessource {
                                             return;
                                         }
                 
+                                        // Message de chargement
                                         setStatus('benchmarkStatus', 'Benchmark réel en cours...', 'info');
                                         resultDiv.innerHTML = '';
                 
                                         try {
+                                            // Prépare le fichier pour l'envoi HTTP
                                             const fd = new FormData();
                                             fd.append('file', file);
                 
+                                            // Appel backend pour charger + tester le fichier
                                             const res = await fetch('/api/benchmark/load?repeat=3', {
                                                 method: 'POST',
                                                 body: fd
@@ -418,7 +443,7 @@ public class UiRessource {
                                                 return;
                                             }
                 
-                                            // affichage résultat
+                                            // affichage résultat (tableau )
                                             resultDiv.innerHTML = `
                                                 <table>
                                                     <thead>
@@ -437,7 +462,7 @@ public class UiRessource {
                                                 </table>
                                             `;
                 
-                                            setStatus('benchmarkStatus', 'Benchmark réel terminé ✔️', 'ok');
+                                            setStatus('benchmarkStatus', 'Benchmark réel terminé ', 'ok');
                 
                                         } catch (e) {
                                             setStatus('benchmarkStatus', 'Erreur réseau : ' + e.message, 'err');

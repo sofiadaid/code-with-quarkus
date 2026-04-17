@@ -33,10 +33,10 @@ public class TableResource {
     private static final Logger logger = LoggerFactory.getLogger(TableResource.class);
 
     @Inject
-    TableRegistry registry;
+    TableRegistry registry; // Gère le stockage des tables en mémoire
 
     @Inject
-    QueryExecutionService queryService;
+    QueryExecutionService queryService; // Exécute les requêtes SQL
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
@@ -107,6 +107,7 @@ public class TableResource {
             }
 
             File file = fileUpload.uploadedFile().toFile();
+            // Lecture du fichier parquet + insertion dans la table
             int inserted = ParquetImporter.loadParquet(file, name, registry);
 
             return Response.status(Response.Status.CREATED)
@@ -147,23 +148,12 @@ public class TableResource {
 
             return Response.ok(result).build();
 
-        } catch (IllegalArgumentException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            logger.error("Erreur query", e);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
-        } catch (IllegalStateException e) {
-            e.printStackTrace();
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
     }
 
@@ -180,15 +170,12 @@ public class TableResource {
 
             return Response.ok(queryService.select(name, selectedColumns)).build();
 
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            logger.error("Erreur Select", e);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
     }
 
@@ -205,15 +192,12 @@ public class TableResource {
 
             return Response.ok(queryService.selectWhere(name, request.columns, request.filter)).build();
 
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            logger.error("Erreur Select where", e);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
     }
 
@@ -230,15 +214,12 @@ public class TableResource {
 
             return Response.ok(queryService.groupByCount(name, column)).build();
 
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            logger.error("Erreur group by", e);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
     }
 
@@ -286,15 +267,12 @@ public class TableResource {
                     "result", result
             )).build();
 
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            logger.error("Erreur d'aggregation", e);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
     }
 
@@ -344,15 +322,12 @@ public class TableResource {
 
             return Response.ok(result).build();
 
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            logger.error("Erreur aggregation groupby", e);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
 
-        } catch (IllegalStateException e) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(Map.of("error", e.getMessage()))
-                    .build();
         }
     }
 
@@ -378,7 +353,7 @@ public class TableResource {
             Map<String, Object> preview = ParquetImporter.previewParquet(file, limit);
             return Response.ok(preview).build();
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Erreur d'affichage", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
