@@ -383,7 +383,7 @@ public class UiRessource {
                                     }
                 
                                     renderBenchmark(data);
-                                    setStatus('benchmarkStatus', 'Benchmark terminé ✔️', 'ok');
+                                    setStatus('benchmarkStatus', 'Benchmark terminé ', 'ok');
                 
                                 } catch (e) {
                                     setStatus('benchmarkStatus', 'Erreur réseau : ' + e.message, 'err');
