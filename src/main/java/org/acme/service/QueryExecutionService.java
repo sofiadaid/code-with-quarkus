@@ -10,12 +10,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Supporte les opérations : SELECT, WHERE, ORDER BY, LIMIT, GROUP BY, agrégations.
+ */
 @ApplicationScoped
 public class QueryExecutionService {
 
     @Inject
     TableRegistry registry;
 
+    /**
+     * Exécute une requête SELECT textuelle sur une table.
+     */
     public List<List<Object>> selectQuery(String tableName, String query) {
         Table table = getTable(tableName);
 
@@ -30,6 +36,7 @@ public class QueryExecutionService {
             throw new IllegalArgumentException("Query must start with SELECT");
         }
 
+        // Supprime le mot-clé SELECT pour traiter le reste
         String afterSelect = trimmedQuery.substring(6).trim();
 
         String selectPart;
@@ -37,6 +44,7 @@ public class QueryExecutionService {
         String orderByPart = null;
         int limitValue = -1;
 
+        // Extraction de la clause LIMIT (en dernier pour ne pas perturber les autres)
         int limitIdx = upperIndexOf(afterSelect, "LIMIT");
         if (limitIdx != -1) {
             String limitPart = afterSelect.substring(limitIdx + 5).trim();
@@ -44,28 +52,35 @@ public class QueryExecutionService {
             afterSelect = afterSelect.substring(0, limitIdx).trim();
         }
 
+        // Extraction de la clause ORDER BY
         int orderIdx = upperIndexOf(afterSelect, "ORDER BY");
         if (orderIdx != -1) {
             orderByPart = afterSelect.substring(orderIdx + 8).trim();
             afterSelect = afterSelect.substring(0, orderIdx).trim();
         }
 
+        // Extraction de la clause WHERE
         int whereIdx = upperIndexOf(afterSelect, "WHERE");
         if (whereIdx != -1) {
             wherePart = afterSelect.substring(whereIdx + 5).trim();
             afterSelect = afterSelect.substring(0, whereIdx).trim();
         }
 
+        // Ce qui reste est la partie SELECT (colonnes ou *)
         selectPart = afterSelect.trim();
 
+        // Résolution des colonnes sélectionnées
         List<String> selectedColumns = resolveSelectedColumns(table, selectPart);
 
+        // Collecte des index de lignes correspondant au WHERE
         List<Integer> matchingRowIndexes = collectMatchingRowIndexes(table, wherePart);
 
+        // Application du tri si ORDER BY présent
         if (orderByPart != null && !orderByPart.isBlank()) {
             applyOrderBy(table, matchingRowIndexes, orderByPart);
         }
 
+        // Application de la limite de résultats
         if (limitValue > 0 && matchingRowIndexes.size() > limitValue) {
             matchingRowIndexes = new ArrayList<>(matchingRowIndexes.subList(0, limitValue));
         }
@@ -73,6 +88,10 @@ public class QueryExecutionService {
         return buildRowsFromIndexes(table, matchingRowIndexes, selectedColumns);
     }
 
+    /**
+     * Retourne toutes les lignes d'une table pour les colonnes spécifiées.
+
+     */
     public List<List<Object>> select(String tableName, List<String> selectedColumns) {
         Table table = getTable(tableName);
 
@@ -86,6 +105,9 @@ public class QueryExecutionService {
         return buildRowsFromIndexes(table, rowIndexes, validatedColumns);
     }
 
+    /**
+     * Retourne les lignes d'une table filtrées par un objet Filter, pour les colonnes spécifiées.
+     */
     public List<List<Object>> selectWhere(String tableName, List<String> selectedColumns, Filter filter) {
         Table table = getTable(tableName);
 
@@ -108,6 +130,7 @@ public class QueryExecutionService {
             throw new IllegalArgumentException("Unknown column in WHERE: " + filterColumn);
         }
 
+        // Parcours de toutes les lignes pour appliquer le filtre
         List<Integer> matchingRowIndexes = new ArrayList<>();
         int rowCount = table.rowCount();
 
@@ -121,6 +144,10 @@ public class QueryExecutionService {
         return buildRowsFromIndexes(table, matchingRowIndexes, validatedColumns);
     }
 
+    /**
+     * Compte le nombre de valeurs non nulles dans une colonne (ou toutes les lignes si colonne nulle).
+
+     */
     public long count(String tableName, String column) {
         Table table = getTable(tableName);
 
@@ -141,6 +168,9 @@ public class QueryExecutionService {
         return count;
     }
 
+    /**
+     * Retourne la valeur minimale d'une colonne.
+     */
     public Object min(String tableName, String column) {
         Table table = getTable(tableName);
         List<Object> values = getColumnValues(table, column);
@@ -158,6 +188,9 @@ public class QueryExecutionService {
         return min;
     }
 
+    /**
+     * Retourne la valeur maximale d'une colonne.
+     */
     public Object max(String tableName, String column) {
         Table table = getTable(tableName);
         List<Object> values = getColumnValues(table, column);
@@ -175,6 +208,9 @@ public class QueryExecutionService {
         return max;
     }
 
+    /**
+     * Retourne la somme des valeurs d'une colonne numérique.
+     */
     public double sum(String tableName, String column) {
         Table table = getTable(tableName);
         List<Object> values = getColumnValues(table, column);
@@ -189,6 +225,9 @@ public class QueryExecutionService {
         return sum;
     }
 
+    /**
+     * Retourne la moyenne des valeurs d'une colonne numérique.
+     */
     public double avg(String tableName, String column) {
         Table table = getTable(tableName);
         List<Object> values = getColumnValues(table, column);
@@ -210,6 +249,9 @@ public class QueryExecutionService {
         return sum / count;
     }
 
+    /**
+     * Groupe les lignes par une colonne et compte les occurrences de chaque valeur.
+     */
     public List<List<Object>> groupByCount(String tableName, String groupByColumn) {
         Table table = getTable(tableName);
         List<Object> groupValues = getColumnValues(table, groupByColumn);
@@ -223,6 +265,9 @@ public class QueryExecutionService {
         return buildGroupAggregateResult(counts);
     }
 
+    /**
+     * Groupe par une colonne et retourne le minimum d'une colonne cible par groupe.
+     */
     public List<List<Object>> groupByMin(String tableName, String groupByColumn, String targetColumn) {
         Table table = getTable(tableName);
         List<Object> groupValues = getColumnValues(table, groupByColumn);
@@ -246,6 +291,9 @@ public class QueryExecutionService {
         return buildGroupAggregateResult(mins);
     }
 
+    /**
+     * Groupe par une colonne et retourne le maximum d'une colonne cible par groupe.
+     */
     public List<List<Object>> groupByMax(String tableName, String groupByColumn, String targetColumn) {
         Table table = getTable(tableName);
         List<Object> groupValues = getColumnValues(table, groupByColumn);
@@ -269,6 +317,9 @@ public class QueryExecutionService {
         return buildGroupAggregateResult(maxs);
     }
 
+    /**
+     * Groupe par une colonne et retourne la somme d'une colonne cible par groupe.
+     */
     public List<List<Object>> groupBySum(String tableName, String groupByColumn, String targetColumn) {
         Table table = getTable(tableName);
         List<Object> groupValues = getColumnValues(table, groupByColumn);
@@ -290,6 +341,9 @@ public class QueryExecutionService {
         return buildGroupAggregateResult(sums);
     }
 
+    /**
+     * Groupe par une colonne et retourne la moyenne d'une colonne cible par groupe.
+     */
     public List<List<Object>> groupByAvg(String tableName, String groupByColumn, String targetColumn) {
         Table table = getTable(tableName);
         List<Object> groupValues = getColumnValues(table, groupByColumn);
@@ -310,6 +364,7 @@ public class QueryExecutionService {
             counts.put(key, counts.getOrDefault(key, 0) + 1);
         }
 
+        // Calcul de la moyenne à partir des sommes et des comptes
         Map<Object, Double> avgs = new LinkedHashMap<>();
         for (Object key : sums.keySet()) {
             avgs.put(key, sums.get(key) / counts.get(key));
@@ -318,6 +373,14 @@ public class QueryExecutionService {
         return buildGroupAggregateResult(avgs);
     }
 
+    // -------------------------------------------------------------------------
+    // Méthodes privées utilitaires
+    // -------------------------------------------------------------------------
+
+    /**
+     * Résout la liste des colonnes depuis la partie SELECT de la requête.
+     * Retourne toutes les colonnes si selectPart vaut "*".
+     */
     private List<String> resolveSelectedColumns(Table table, String selectPart) {
         if (selectPart == null || selectPart.isBlank()) {
             throw new IllegalArgumentException("SELECT columns are required");
@@ -339,6 +402,9 @@ public class QueryExecutionService {
         return selectedColumns;
     }
 
+    /**
+     * Vérifie que toutes les colonnes demandées existent dans la table.
+     */
     private List<String> validateColumns(Table table, List<String> columns) {
         List<String> validated = new ArrayList<>();
 
@@ -353,6 +419,10 @@ public class QueryExecutionService {
         return validated;
     }
 
+    /**
+     * Collecte les index des lignes correspondant à la clause WHERE.
+     * Si wherePart est null ou vide, toutes les lignes sont retournées.
+     */
     private List<Integer> collectMatchingRowIndexes(Table table, String wherePart) {
         List<Integer> rowIndexes = new ArrayList<>();
         int rowCount = table.rowCount();
@@ -366,6 +436,10 @@ public class QueryExecutionService {
         return rowIndexes;
     }
 
+    /**
+     * Trie les index de lignes selon la clause ORDER BY.
+     * Supporte ASC (défaut) et DESC.
+     */
     private void applyOrderBy(Table table, List<Integer> rowIndexes, String orderByPart) {
         String[] tokens = orderByPart.trim().split("\\s+");
         String orderColumn = tokens[0].trim();
@@ -379,6 +453,7 @@ public class QueryExecutionService {
             Object va = getCellValue(table, orderColumn, a);
             Object vb = getCellValue(table, orderColumn, b);
 
+            // Les nulls sont placés en dernier
             if (va == null && vb == null) {
                 return 0;
             }
@@ -394,6 +469,10 @@ public class QueryExecutionService {
         });
     }
 
+    /**
+     * Évalue si une ligne satisfait une condition WHERE.
+     * Supporte les opérateurs : =, !=, >, >=, <, <=, LIKE.
+     */
     private boolean matchesWhere(Table table, int rowIndex, String condition) {
         String trimmed = condition.trim();
         String[] operators = {">=", "<=", "!=", ">", "<", "="};
@@ -405,6 +484,7 @@ public class QueryExecutionService {
             }
 
             String colName = trimmed.substring(0, opIdx).trim();
+            // Supprime les guillemets simples autour des valeurs string
             String rawValue = trimmed.substring(opIdx + operator.length()).trim().replaceAll("^'|'$", "");
 
             if (!table.getData().containsKey(colName)) {
@@ -416,6 +496,7 @@ public class QueryExecutionService {
                 return false;
             }
 
+            // Comparaison numérique
             if (cell instanceof Number) {
                 double left = ((Number) cell).doubleValue();
                 double right;
@@ -437,6 +518,7 @@ public class QueryExecutionService {
                 };
             }
 
+            // Comparaison textuelle
             int cmp = cell.toString().compareTo(rawValue);
             return switch (operator) {
                 case "=" -> cmp == 0;
@@ -449,6 +531,7 @@ public class QueryExecutionService {
             };
         }
 
+        // Support de l'opérateur LIKE (avec % et _)
         if (trimmed.toUpperCase().contains(" LIKE ")) {
             String[] parts = trimmed.split("(?i)\\sLIKE\\s");
             if (parts.length != 2) {
@@ -456,6 +539,7 @@ public class QueryExecutionService {
             }
 
             String colName = parts[0].trim();
+            // Conversion du pattern SQL en regex Java
             String pattern = parts[1].trim()
                     .replaceAll("^'|'$", "")
                     .replace("%", ".*")
@@ -472,6 +556,9 @@ public class QueryExecutionService {
         throw new IllegalArgumentException("Cannot parse WHERE condition: " + condition);
     }
 
+    /**
+     * Vérifie si une valeur satisfait un objet Filter (opérateur + valeur de référence).
+     */
     @SuppressWarnings("unchecked")
     private boolean matchFilter(Object value, Filter filter) {
         if (value == null) {
@@ -492,6 +579,9 @@ public class QueryExecutionService {
         };
     }
 
+    /**
+     * Construit la liste de lignes à partir d'index de lignes et de colonnes sélectionnées.
+     */
     private List<List<Object>> buildRowsFromIndexes(Table table, List<Integer> rowIndexes, List<String> selectedColumns) {
         List<List<Object>> result = new ArrayList<>();
 
@@ -502,6 +592,9 @@ public class QueryExecutionService {
         return result;
     }
 
+    /**
+     * Construit une ligne à partir de son index et des colonnes demandées.
+     */
     private List<Object> buildRow(Table table, int rowIndex, List<String> selectedColumns) {
         List<Object> row = new ArrayList<>();
 
@@ -512,6 +605,9 @@ public class QueryExecutionService {
         return row;
     }
 
+    /**
+     * Retourne la valeur d'une cellule à partir du nom de colonne et de l'index de ligne.
+     */
     private Object getCellValue(Table table, String columnName, int rowIndex) {
         List<Object> columnData = table.getData().get(columnName);
         if (columnData == null) {
@@ -523,11 +619,17 @@ public class QueryExecutionService {
         return columnData.get(rowIndex);
     }
 
+    /**
+     * Récupère une table depuis le registre, ou lève une exception si introuvable.
+     */
     private Table getTable(String tableName) {
         return registry.get(tableName)
                 .orElseThrow(() -> new IllegalStateException("Table not found: " + tableName));
     }
 
+    /**
+     * Retourne la liste de toutes les valeurs d'une colonne.
+     */
     private List<Object> getColumnValues(Table table, String column) {
         if (column == null || column.isBlank()) {
             throw new IllegalArgumentException("Column is required");
@@ -541,6 +643,9 @@ public class QueryExecutionService {
         return table.getData().get(trimmed);
     }
 
+    /**
+     * Convertit un objet en double. Lève une exception si la colonne n'est pas numérique.
+     */
     private double toDouble(Object value, String column) {
         if (!(value instanceof Number)) {
             throw new IllegalArgumentException("Column is not numeric: " + column);
@@ -548,11 +653,17 @@ public class QueryExecutionService {
         return ((Number) value).doubleValue();
     }
 
+    /**
+     * Compare deux objets Comparable. Utilisé pour MIN, MAX et ORDER BY.
+     */
     @SuppressWarnings("unchecked")
     private int compare(Object a, Object b) {
         return ((Comparable<Object>) a).compareTo(b);
     }
 
+    /**
+     * Convertit une map de résultats d'agrégation en liste de lignes [clé, valeur].
+     */
     private List<List<Object>> buildGroupAggregateResult(Map<Object, ?> aggregates) {
         List<List<Object>> result = new ArrayList<>();
         for (Map.Entry<Object, ?> entry : aggregates.entrySet()) {
@@ -561,10 +672,17 @@ public class QueryExecutionService {
         return result;
     }
 
+    /**
+     * Recherche insensible à la casse d'un mot-clé dans une chaîne.
+     * Retourne l'index de début, ou -1 si absent.
+     */
     private int upperIndexOf(String s, String keyword) {
         return s.toUpperCase().indexOf(keyword);
     }
 
+    /**
+     * Retourne la liste de tous les index de lignes d'une table.
+     */
     private List<Integer> allRowIndexes(Table table) {
         List<Integer> indexes = new ArrayList<>();
         for (int i = 0; i < table.rowCount(); i++) {
