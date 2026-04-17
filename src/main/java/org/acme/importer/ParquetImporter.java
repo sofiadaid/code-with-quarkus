@@ -23,7 +23,9 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ParquetImporter {
 
@@ -202,8 +204,9 @@ public class ParquetImporter {
         }
     }
 
-    public static List<Object[]> previewParquet(File file, int limit) throws IOException {
-        List<Object[]> preview = new ArrayList<>();
+    public static Map<String, Object> previewParquet(File file, int limit) throws IOException {
+        List<List<Object>> rows = new ArrayList<>();
+        List<String> columns = new ArrayList<>();
         int count = 0;
 
         InputFile inputFile = new InputFile() {
@@ -266,6 +269,12 @@ public class ParquetImporter {
 
         try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
             MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+
+            // récupérer les noms de colonnes
+            for (Type field : schema.getFields()) {
+                columns.add(field.getName());
+            }
+
             MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
             PageReadStore pages;
 
@@ -276,18 +285,22 @@ public class ParquetImporter {
 
                 for (int i = 0; i < rowCount && count < limit; i++) {
                     Group group = recordReader.read();
-                    Object[] row = new Object[schema.getFieldCount()];
+                    List<Object> row = new ArrayList<>();
 
                     for (int col = 0; col < schema.getFieldCount(); col++) {
-                        row[col] = group.getValueToString(col, 0);
+                        row.add(group.getValueToString(col, 0));
                     }
 
-                    preview.add(row);
+                    rows.add(row);
                     count++;
                 }
             }
         }
 
-        return preview;
+        Map<String, Object> result = new HashMap<>();
+        result.put("columns", columns);
+        result.put("rows", rows);
+
+        return result;
     }
 }

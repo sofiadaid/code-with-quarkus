@@ -375,10 +375,8 @@ public class TableResource {
 
             File file = fileUpload.uploadedFile().toFile();
 
-            List<Object[]> preview = ParquetImporter.previewParquet(file, limit);
-
+            Map<String, Object> preview = ParquetImporter.previewParquet(file, limit);
             return Response.ok(preview).build();
-
         } catch (Exception e) {
             e.printStackTrace();
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)

@@ -101,7 +101,10 @@ public class UiRessource {
                 <div class="card">
                             <h2>Benchmark</h2>
                 
-                            <button onclick="runBenchmark()">Lancer benchmark</button>
+                            <div style="display:flex; gap:10px;">
+                                <button onclick="runBenchmark()">Benchmark synthétique</button>
+                                <button onclick="runRealBenchmark()">Benchmark réel</button>
+                            </div>
                 
                             <div id="benchmarkStatus"></div>
                 
@@ -110,6 +113,7 @@ public class UiRessource {
                                     <table id="benchmarkTable"></table>
                                 </div>
                             </div>
+                            <div id="realBenchmarkResult" style="margin-top:16px;"></div>
                         </div>
                 
                 <!-- QUERY -->
@@ -170,17 +174,19 @@ public class UiRessource {
                                                  body: fd
                                              });
                 
-                                             const rows = await rowsRes.json();
+                                             const data = await rowsRes.json();
                 
                                              if (!rowsRes.ok) {
-                                                 setStatus('previewStatus', `Erreur : ${rows.error}`, 'err');
+                                                 setStatus('previewStatus', `Erreur : ${data.error}`, 'err');
                                                  return;
                                              }
                 
-                                             //  génération automatique des colonnes
-                                             const colNames = rows[0]?.map((_, i) => "col_" + i) || [];
+                                             const colNames = data.columns;
+                                             const rows = data.rows;               
+                                                     
                 
                                              renderPreview(colNames, rows, "preview");
+                                             
                                              setStatus('previewStatus', '', '');
                 
                                          } catch(e) {
@@ -371,6 +377,60 @@ public class UiRessource {
                                     setStatus('benchmarkStatus', 'Erreur réseau : ' + e.message, 'err');
                                 }
                             }
+                            
+                            async function runRealBenchmark() {
+                                        const file = document.getElementById('fileInput').files[0];
+                                        const resultDiv = document.getElementById('realBenchmarkResult');
+                
+                                        if (!file) {
+                                            setStatus('benchmarkStatus', 'Choisis un fichier parquet !', 'err');
+                                            return;
+                                        }
+                
+                                        setStatus('benchmarkStatus', 'Benchmark réel en cours...', 'info');
+                                        resultDiv.innerHTML = '';
+                
+                                        try {
+                                            const fd = new FormData();
+                                            fd.append('file', file);
+                
+                                            const res = await fetch('/api/benchmark/load?repeat=3', {
+                                                method: 'POST',
+                                                body: fd
+                                            });
+                
+                                            const data = await res.json();
+                
+                                            if (!res.ok) {
+                                                setStatus('benchmarkStatus', `Erreur : ${data.error}`, 'err');
+                                                return;
+                                            }
+                
+                                            // affichage résultat
+                                            resultDiv.innerHTML = `
+                                                <table>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Metric</th>
+                                                            <th>Value</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr><td>Rows</td><td>${data.rows}</td></tr>
+                                                        <tr><td>Load (ms)</td><td>${data.loadMs}</td></tr>
+                                                        <tr><td>Select (ms)</td><td>${data.selectMs}</td></tr>
+                                                        ${data.whereMs ? `<tr><td>Where (ms)</td><td>${data.whereMs}</td></tr>` : ""}
+                                                        ${data.groupByMs ? `<tr><td>GroupBy (ms)</td><td>${data.groupByMs}</td></tr>` : ""}
+                                                    </tbody>
+                                                </table>
+                                            `;
+                
+                                            setStatus('benchmarkStatus', 'Benchmark réel terminé ✔️', 'ok');
+                
+                                        } catch (e) {
+                                            setStatus('benchmarkStatus', 'Erreur réseau : ' + e.message, 'err');
+                                        }
+                                    }
                 </script>
             </body>
             </html>
