@@ -102,11 +102,17 @@ public class UiRessource {
                 <div class="card">
                     <h2>1 — Créer une table</h2>
                     <label>Nom de la table</label>
-                    <input type="text" id="tableName" placeholder="ex: taxi" />
-                    <p style="font-size:12px; color:#888; margin-bottom:10px;">
-                        Ce nom sera utilisé pour la création, l'import, l'aperçu et les requêtes.
-                    </p>
-                    <button onclick="doCreate()">Créer</button>
+                    <input type="text" id="tableName" placeholder="ex: trips" />
+                    <label style="margin-top:12px;">Colonnes</label>
+                    <div id="columnsList">
+                       <!-- les colonnes s'ajoutent ici dynamiquement -->
+                    </div>
+                    <button onclick="addColumn()"\s
+                           style="background:white; color:#1a1a1a; margin-bottom:12px;">
+                                    + Ajouter une colonne
+                    </button>
+                    <br/>
+                    <button onclick="doCreate()">Créer la table</button>
                     <div id="createStatus"></div>
                 </div>
 
@@ -227,35 +233,76 @@ public class UiRessource {
                     function getTableName() {
                         return document.getElementById('tableName').value.trim();
                     }
-
-                    async function doCreate() {
-                        const name = getTableName();
-
-                        if (!name) {
-                            setStatus('createStatus', 'Remplissez le nom de la table.', 'err');
-                            return;
-                        }
-
-                        setStatus('createStatus', 'Création en cours…', 'info');
-
-                        try {
-                            const r = await fetch('/api/tables', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ name: name, columns: [] })
-                            });
-
-                            const d = await r.json();
-
-                            if (r.ok) {
-                                setStatus('createStatus', `Table "${name}" créée avec succès.`, 'ok');
-                            } else {
-                                setStatus('createStatus', `Erreur : ${d.error}`, 'err');
+        
+                    function addColumn() {
+                                const list = document.getElementById('columnsList');
+                                const div = document.createElement('div');
+                                div.style = 'display:flex; gap:8px; margin-bottom:8px;';
+                                div.innerHTML = `
+                                    <input type="text"\s
+                                           placeholder="Nom colonne"\s
+                                           style="flex:1; margin:0;"
+                                           class="col-name"/>
+                                    <select class="col-type" style="width:120px; margin:0;">
+                                        <option value="INT">INTEGER</option>
+                                        <option value="LONG">LONG</option>
+                                        <option value="DOUBLE">DOUBLE</option>
+                                        <option value="STRING">STRING</option>
+                                        <option value="DATE">DATE</option>
+                                    </select>
+                                    <button onclick="this.parentElement.remove()"\s
+                                            style="background:white; color:red; border-color:red;">
+        
+                                    </button>
+                                `;
+                                list.appendChild(div);
                             }
-                        } catch (e) {
-                            setStatus('createStatus', 'Erreur réseau : ' + e.message, 'err');
-                        }
-                    }
+        
+                            async function doCreate() {
+                                const name = getTableName();
+        
+                                // Récupérer toutes les colonnes saisies
+                                const colNames = document.querySelectorAll('.col-name');
+                                const colTypes = document.querySelectorAll('.col-type');
+        
+                                const columns = [];
+                                for (let i = 0; i < colNames.length; i++) {
+                                    const colName = colNames[i].value.trim();
+                                    const colType = colTypes[i].value;
+                                    if (!colName) {
+                                        setStatus('createStatus', 'Remplissez tous les noms de colonnes.', 'err');
+                                        return;
+                                    }
+                                    columns.push({ name: colName, type: colType });
+                                }
+        
+                                if (!name) {
+                                    setStatus('createStatus', 'Remplissez le nom de la table.', 'err');
+                                    return;
+                                }
+        
+                                if (columns.length === 0) {
+                                    setStatus('createStatus', 'Ajoutez au moins une colonne.', 'err');
+                                    return;
+                                }
+        
+                                try {
+                                    const r = await fetch('/api/tables', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ name: name, columns: columns })
+                                    });
+                                    const d = await r.json();
+                                    if (r.ok) {
+                                        setStatus('createStatus', `Table "${name}" créée avec succès.`, 'ok');
+                                    } else {
+                                        setStatus('createStatus', `Erreur : ${d.error}`, 'err');
+                                    }
+                                } catch (e) {
+                                    setStatus('createStatus', 'Erreur réseau : ' + e.message, 'err');
+                                }
+                            }
+
 
                     async function doImport() {
                         const table = getTableName();

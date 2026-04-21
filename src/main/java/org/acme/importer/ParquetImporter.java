@@ -93,15 +93,15 @@ public class ParquetImporter {
         try (ParquetFileReader reader = ParquetFileReader.open(inputFile)) {
             MessageType schema = reader.getFooter().getFileMetaData().getSchema();
 
-            Table table = registry.get(tableName).orElseGet(() -> {
-                Table newTable = new Table(tableName, inferColumns(schema));
-                return registry.create(newTable);
-            });
+            Table table = registry.get(tableName)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Table '" + tableName + "' n'existe pas. Créez-la d'abord."
+                    ));
 
-// Si la table existe mais est vide (créée sans colonnes), on injecte le schéma Parquet
             if (table.getColumns() == null || table.getColumns().isEmpty()) {
-                table.setColumns(inferColumns(schema));
-                // buildIndex() et initializeStorage() sont appelés automatiquement par setColumns()
+                throw new IllegalStateException(
+                        "La table '" + tableName + "' n'a pas de colonnes définies."
+                );
             }
 
 // Si la table existe mais est vide (créée sans colonnes), on injecte le schéma Parquet
@@ -120,6 +120,21 @@ public class ParquetImporter {
                                 + " Table=" + columns.size()
                 );
             }
+            // AJOUTER ICI — vérification des noms de colonnes
+            List<Column> tableColumns = table.getColumns();
+            List<Type> parquetFields = schema.getFields();
+
+            for (int i = 0; i < tableColumns.size(); i++) {
+                String tableColName = tableColumns.get(i).getName();
+                String parquetColName = parquetFields.get(i).getName();
+                if (!tableColName.equals(parquetColName)) {
+                    throw new IllegalArgumentException(
+                            "Colonne " + i + " : table='" + tableColName +
+                                    "' mais fichier='" + parquetColName + "'"
+                    );
+                }
+            }
+
             MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
             PageReadStore pages;
 
